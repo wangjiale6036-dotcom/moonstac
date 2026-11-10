@@ -4,6 +4,14 @@ import {
 
 options(
   link: {
-    "js": { "exports": [ "search_request", "page_summary" ], "format": "esm" },
+    "js": {
+      "exports": [
+        "search_request",
+        "page_summary",
+        "landing_summary",
+        "collections_summary",
+      ],
+      "format": "esm",
+    },
   },
 )

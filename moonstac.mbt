@@ -68,46 +68,12 @@ pub fn parse_item_json(v : Json) -> Item raise StacError {
   }
   let id = string_field(v, "id")
   let collection = optional_string(v, "collection")
-  match field(v, "geometry") {
-    Some(Null) =>
-      if field(v, "bbox") != None {
-        raise Invalid("bbox must be absent when geometry is null")
-      }
-    Some(Object(_)) => {
-      let bbox = match field(v, "bbox") {
-        Some(Array(xs)) => xs
-        _ => raise Invalid("missing bbox")
-      }
-      if bbox.length() != 4 && bbox.length() != 6 {
-        raise Invalid("invalid bbox")
-      }
-      for value in bbox {
-        match value {
-          Number(_, ..) => ()
-          _ => raise Invalid("invalid bbox")
-        }
-      }
-    }
-    _ => raise Invalid("invalid geometry")
-  }
-  match field(v, "links") {
-    Some(Array(_)) => ()
-    _ => raise Invalid("invalid links")
-  }
+  validate_item_shape(v, collection)
   let properties = match field(v, "properties") {
     Some(Object(m)) => Json::object(m)
     _ => raise Invalid("invalid properties")
   }
   let datetime = optional_string(properties, "datetime")
-  match datetime {
-    Some(s) if s != "" => ()
-    _ =>
-      if !(field(properties, "datetime") is Some(Null)) ||
-        optional_string(properties, "start_datetime") == None ||
-        optional_string(properties, "end_datetime") == None {
-        raise Invalid("missing datetime or interval")
-      }
-  }
   let entries = match field(v, "assets") {
     Some(Object(m)) => m
     _ => raise Invalid("invalid assets")
@@ -139,6 +105,7 @@ pub fn parse_page(text : String) -> ItemPage raise StacError {
   for feature in features {
     items.push(parse_item_json(feature))
   }
+  ignore(validate_links(v, "page"))
   let mut next : NextLink? = None
   match field(v, "links") {
     Some(Array(links)) =>
@@ -188,17 +155,10 @@ pub fn search_body(
   collections : Array[String],
   limit : Int,
 ) -> String raise StacError {
-  if limit < 1 || limit > 1000 || bbox.length() != 4 {
-    raise Invalid("invalid search limit or bbox")
+  if limit < 1 || limit > 1000 {
+    raise Invalid("invalid search limit")
   }
-  if bbox[0] > bbox[2] ||
-    bbox[1] > bbox[3] ||
-    bbox[0] < -180.0 ||
-    bbox[2] > 180.0 ||
-    bbox[1] < -90.0 ||
-    bbox[3] > 90.0 {
-    raise Invalid("invalid bbox")
-  }
+  validate_search_bbox(bbox)
   let nums : Array[Json] = []
   for n in bbox {
     nums.push(Json::number(n))
@@ -230,16 +190,21 @@ pub fn search_request(input : String) -> String {
 ///|
 fn search_request_checked(input : String) -> String raise StacError {
   let v = @json.parse(input) catch { _ => raise Invalid("invalid JSON") }
-  let raw_bbox = match field(v, "bbox") {
-    Some(Array(xs)) => xs
-    _ => raise Invalid("invalid bbox")
-  }
-  let bbox : Array[Double] = []
-  for value in raw_bbox {
-    match value {
-      Number(n, ..) => bbox.push(n)
-      _ => raise Invalid("invalid bbox value")
+  let out : Map[String, Json] = Map([])
+  match field(v, "bbox") {
+    None => ()
+    Some(Array(raw_bbox)) => {
+      let bbox : Array[Double] = []
+      for value in raw_bbox {
+        match value {
+          Number(n, ..) => bbox.push(n)
+          _ => raise Invalid("invalid bbox value")
+        }
+      }
+      validate_search_bbox(bbox)
+      out["bbox"] = Json::array(raw_bbox)
     }
+    _ => raise Invalid("invalid bbox")
   }
   let collections : Array[String] = []
   match field(v, "collections") {
@@ -253,6 +218,30 @@ fn search_request_checked(input : String) -> String raise StacError {
       }
     _ => raise Invalid("invalid collections")
   }
+  if collections.length() > 0 {
+    let names : Array[Json] = []
+    for name in collections {
+      names.push(Json::string(name))
+    }
+    out["collections"] = Json::array(names)
+  }
+  match field(v, "ids") {
+    None => ()
+    Some(Array(values)) => {
+      let ids : Array[Json] = []
+      for value in values {
+        match value {
+          String(id) if id != "" => ids.push(Json::string(id))
+          _ => raise Invalid("invalid item id")
+        }
+      }
+      if ids.length() == 0 {
+        raise Invalid("empty ids")
+      }
+      out["ids"] = Json::array(ids)
+    }
+    _ => raise Invalid("invalid ids")
+  }
   let limit = match field(v, "limit") {
     Some(Number(n, ..)) => {
       let parsed = n.to_int()
@@ -263,14 +252,33 @@ fn search_request_checked(input : String) -> String raise StacError {
     }
     _ => 10
   }
-  let body = search_body(
-    bbox,
-    optional_string(v, "datetime"),
-    collections,
-    limit,
-  )
+  if limit < 1 || limit > 1000 {
+    raise Invalid("invalid limit")
+  }
+  out["limit"] = Json::number(limit.to_double())
+  match optional_string(v, "datetime") {
+    None => ()
+    Some(value) if value != "" => out["datetime"] = Json::string(value)
+    _ => raise Invalid("invalid datetime")
+  }
+  let body = Json::object(out).stringify()
   let output : Json = { "status": "ok", "body": body }
   output.stringify()
+}
+
+///|
+fn validate_search_bbox(bbox : Array[Double]) -> Unit raise StacError {
+  if bbox.length() != 4 {
+    raise Invalid("invalid bbox length")
+  }
+  if bbox[0] > bbox[2] ||
+    bbox[1] > bbox[3] ||
+    bbox[0] < -180.0 ||
+    bbox[2] > 180.0 ||
+    bbox[1] < -90.0 ||
+    bbox[3] > 90.0 {
+    raise Invalid("invalid bbox")
+  }
 }
 
 ///|

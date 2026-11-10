@@ -6,11 +6,19 @@ import {
 }
 
 // Values
+pub fn collections_summary(String) -> String
+
+pub fn landing_summary(String) -> String
+
 pub fn page_summary(String) -> String
+
+pub fn parse_collections(String) -> CollectionPage raise StacError
 
 pub fn parse_item(String) -> Item raise StacError
 
 pub fn parse_item_json(Json) -> Item raise StacError
+
+pub fn parse_landing(String) -> Landing raise StacError
 
 pub fn parse_page(String) -> ItemPage raise StacError
 
@@ -29,6 +37,18 @@ pub(all) struct Asset {
   href : String
 } derive(Eq, @debug.Debug)
 
+pub(all) struct Collection {
+  id : String
+  title : String?
+  description : String
+  license : String
+} derive(Eq, @debug.Debug)
+
+pub(all) struct CollectionPage {
+  collections : Array[Collection]
+  next : String?
+} derive(Eq, @debug.Debug)
+
 pub(all) struct Item {
   id : String
   collection : String?
@@ -39,6 +59,14 @@ pub(all) struct Item {
 pub(all) struct ItemPage {
   items : Array[Item]
   next : NextLink?
+} derive(Eq, @debug.Debug)
+
+pub(all) struct Landing {
+  id : String
+  description : String
+  search : String?
+  collections : String?
+  conforms_to : Array[String]
 } derive(Eq, @debug.Debug)
 
 pub(all) struct NextLink {

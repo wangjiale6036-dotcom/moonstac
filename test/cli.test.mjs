@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {search, validateText} from '../cli.mjs';
+import {discover, listCollections, search, validateText} from '../cli.mjs';
 
 function item(id) {
   return {
@@ -21,6 +21,40 @@ test('MoonBit validates and extracts an ItemCollection', () => {
   assert.throws(() => validateText('{"type":"FeatureCollection","features":[{"id":"bad"}]}'), /Invalid STAC/);
 });
 
+test('discover resolves relative search and collections links', async () => {
+  const landing = JSON.stringify({
+    stac_version: '1.0.0', type: 'Catalog', id: 'demo', description: 'Demo catalog',
+    links: [{rel: 'search', href: './search'}, {rel: 'data', href: './collections'}],
+    conformsTo: ['https://api.stacspec.org/v1.0.0/item-search'],
+  });
+  const transport = async () => ({ok: true, text: async () => landing});
+  const result = await discover('https://example.com/v1/', transport);
+  assert.equal(result.search, 'https://example.com/v1/search');
+  assert.equal(result.collections, 'https://example.com/v1/collections');
+  assert.equal(result.conformsTo.length, 1);
+});
+
+test('lists STAC Collections across pages', async () => {
+  const collection = id => ({
+    stac_version: '1.0.0', type: 'Collection', id, description: `${id} data`,
+    license: 'CC-BY-4.0', links: [],
+    extent: {spatial: {bbox: [[-180, -90, 180, 90]]}, temporal: {interval: [[null, null]]}},
+  });
+  const seen = [];
+  const transport = async url => {
+    seen.push(url.href);
+    return {ok: true, text: async () => JSON.stringify({
+      collections: [collection(seen.length === 1 ? 'a' : 'b')],
+      links: seen.length === 1 ? [{rel: 'next', href: '?page=2'}] : [],
+    })};
+  };
+  const result = await listCollections('https://example.com/collections', 3, transport);
+  assert.deepEqual(result.collections.map(x => x.id), ['a', 'b']);
+  assert.equal(result.pages, 2);
+  assert.equal(result.hasMore, false);
+  assert.equal(seen[1], 'https://example.com/collections?page=2');
+});
+
 test('GET search follows relative next link', async () => {
   const seen = [];
   const transport = async (url, request) => {
@@ -35,6 +69,18 @@ test('GET search follows relative next link', async () => {
   assert.equal(seen[0].url.searchParams.get('collections'), 'sentinel-2-l2a');
   assert.equal(seen[0].url.searchParams.get('bbox'), '120,30,121,31');
   assert.equal(seen[1].request.method, 'GET');
+});
+
+test('searches by item ID without a bounding box', async () => {
+  let requestUrl;
+  const transport = async url => {
+    requestUrl = url;
+    return {ok: true, text: async () => page('scene-1')};
+  };
+  const result = await search({url: 'https://example.com/search', ids: ['scene-1']}, transport);
+  assert.equal(result.items[0].id, 'scene-1');
+  assert.equal(requestUrl.searchParams.get('ids'), 'scene-1');
+  assert.equal(requestUrl.searchParams.has('bbox'), false);
 });
 
 test('POST search follows a POST next link body', async () => {
@@ -68,6 +114,7 @@ test('POST pagination merges body and headers when requested', async () => {
 
 test('rejects invalid query and pagination cycle', async () => {
   await assert.rejects(() => search({url: 'https://example.com/search', bbox: '181,0,182,1'}), /Invalid search/);
+  await assert.rejects(() => search({url: 'https://example.com/search', limit: '1.5'}), /Invalid search/);
   const repeating = async () => ({ok: true, text: async () => page('repeat', {rel: 'next', href: '/search?bbox=120%2C30%2C121%2C31&limit=10'})});
   await assert.rejects(() => search({url: 'https://example.com/search', bbox: '120,30,121,31'}, repeating), /Pagination cycle/);
 });

@@ -2,6 +2,10 @@
 package "wangjiale6036-dotcom/moonstac/bridge"
 
 // Values
+pub fn collections_summary(String) -> String
+
+pub fn landing_summary(String) -> String
+
 pub fn page_summary(String) -> String
 
 pub fn search_request(String) -> String

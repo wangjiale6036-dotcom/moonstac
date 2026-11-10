@@ -1,16 +1,17 @@
 #!/usr/bin/env node
 import {readFile} from 'node:fs/promises';
 import {pathToFileURL} from 'node:url';
-import {page_summary, search_request} from './_build/js/release/build/bridge/bridge.js';
+import {collections_summary, landing_summary, page_summary, search_request} from './_build/js/release/build/bridge/bridge.js';
 
 function options(args) {
-  const result = {collections: []};
+  const result = {collections: [], ids: []};
   for (let i = 0; i < args.length; i++) {
     const key = args[i];
     if (!key.startsWith('--')) throw new Error(`Unexpected argument: ${key}`);
     const value = args[++i];
     if (value === undefined || value.startsWith('--')) throw new Error(`Missing value for ${key}`);
     if (key === '--collection') result.collections.push(value);
+    else if (key === '--id') result.ids.push(value);
     else result[key.slice(2)] = value;
   }
   return result;
@@ -22,12 +23,49 @@ export function validateText(text) {
   return result;
 }
 
+export async function discover(url, fetchImpl = fetch) {
+  const target = new URL(url);
+  if (!['http:', 'https:'].includes(target.protocol)) throw new Error('URL must use HTTP or HTTPS');
+  const response = await fetchImpl(target);
+  if (!response.ok) throw new Error(`STAC API returned HTTP ${response.status} at ${target.href}`);
+  const result = JSON.parse(landing_summary(await response.text()));
+  if (result.status !== 'ok') throw new Error(`Invalid STAC landing page: ${result.message}`);
+  for (const key of ['search', 'collections']) {
+    if (result[key]) result[key] = new URL(result[key], target).href;
+  }
+  return result;
+}
+
+export async function listCollections(url, maxPages = 5, fetchImpl = fetch) {
+  const start = new URL(url);
+  if (!['http:', 'https:'].includes(start.protocol)) throw new Error('URL must use HTTP or HTTPS');
+  if (!Number.isSafeInteger(maxPages) || maxPages < 1 || maxPages > 100) {
+    throw new Error('--max-pages must be an integer from 1 to 100');
+  }
+  const seen = new Set();
+  const collections = [];
+  let next = start;
+  let pages = 0;
+  while (next && pages < maxPages) {
+    if (!['http:', 'https:'].includes(next.protocol)) throw new Error('Pagination URL must use HTTP or HTTPS');
+    if (seen.has(next.href)) throw new Error('Collection pagination cycle detected');
+    seen.add(next.href);
+    const response = await fetchImpl(next);
+    if (!response.ok) throw new Error(`STAC API returned HTTP ${response.status} at ${next.href}`);
+    const page = JSON.parse(collections_summary(await response.text()));
+    if (page.status !== 'ok') throw new Error(`Invalid STAC Collections page: ${page.message}`);
+    pages++;
+    collections.push(...page.collections);
+    next = page.next ? new URL(page.next, next) : null;
+  }
+  return {collections, pages, hasMore: next !== null};
+}
+
 function queryBody(opts) {
-  if (!opts.bbox) throw new Error('--bbox requires four comma-separated coordinates');
-  const bbox = opts.bbox.split(',').map(Number);
-  if (bbox.some(n => !Number.isFinite(n))) throw new Error('Invalid bbox number');
+  const bbox = opts.bbox?.split(',').map(Number);
+  if (bbox?.some(n => !Number.isFinite(n))) throw new Error('Invalid bbox number');
   const result = JSON.parse(search_request(JSON.stringify({
-    bbox, collections: opts.collections, datetime: opts.datetime,
+    bbox, collections: opts.collections, ids: opts.ids?.length ? opts.ids : undefined, datetime: opts.datetime,
     limit: opts.limit === undefined ? 10 : Number(opts.limit),
   })));
   if (result.status !== 'ok') throw new Error(`Invalid search: ${result.message}`);
@@ -45,10 +83,11 @@ export async function search(opts, fetchImpl = fetch) {
   if (!['http:', 'https:'].includes(url.protocol)) throw new Error('URL must use HTTP or HTTPS');
   const body = queryBody(opts);
   if (method === 'GET') {
-    url.searchParams.set('bbox', body.bbox.join(','));
+    if (body.bbox) url.searchParams.set('bbox', body.bbox.join(','));
     url.searchParams.set('limit', String(body.limit));
     if (body.datetime) url.searchParams.set('datetime', body.datetime);
     if (body.collections) url.searchParams.set('collections', body.collections.join(','));
+    if (body.ids) url.searchParams.set('ids', body.ids.join(','));
   }
   let next = {href: url.href, method, body: method === 'POST' ? body : null, headers: null, merge: false};
   const seen = new Set();
@@ -98,12 +137,21 @@ export async function main(args) {
     if (rest.length !== 1) throw new Error('Usage: node cli.mjs validate <item-collection.json>');
     const page = validateText(await readFile(rest[0], 'utf8'));
     console.log(JSON.stringify({valid: true, items: page.items.length, hasNext: page.next !== null}));
+  } else if (command === 'discover') {
+    const opts = options(rest);
+    if (!opts.url) throw new Error('Usage: node cli.mjs discover --url <stac-api-root>');
+    console.log(JSON.stringify(await discover(opts.url), null, 2));
+  } else if (command === 'collections') {
+    const opts = options(rest);
+    if (!opts.url) throw new Error('Usage: node cli.mjs collections --url <collections-endpoint> [--max-pages N]');
+    const maxPages = opts['max-pages'] === undefined ? 5 : Number(opts['max-pages']);
+    console.log(JSON.stringify(await listCollections(opts.url, maxPages), null, 2));
   } else if (command === 'search') {
     const opts = options(rest);
-    if (!opts.url) throw new Error('Usage: node cli.mjs search --url <search-endpoint> --bbox <west,south,east,north> [--datetime ...] [--collection ...] [--limit N] [--method GET|POST] [--max-pages N]');
+    if (!opts.url) throw new Error('Usage: node cli.mjs search --url <search-endpoint> [--bbox west,south,east,north] [--datetime ...] [--collection ...] [--id ...] [--limit N] [--method GET|POST] [--max-pages N]');
     console.log(JSON.stringify(await search(opts), null, 2));
   } else {
-    throw new Error('Usage: node cli.mjs <validate|search> ...');
+    throw new Error('Usage: node cli.mjs <discover|collections|validate|search> ...');
   }
 }
 
