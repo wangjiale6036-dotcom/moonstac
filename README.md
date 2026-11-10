@@ -18,22 +18,27 @@ node cli.mjs discover --url https://earth-search.aws.element84.com/v1/
 node cli.mjs collections --url https://earth-search.aws.element84.com/v1/collections
 node cli.mjs search --url https://earth-search.aws.element84.com/v1/search --bbox 120,30,121,31 --collection sentinel-2-l2a --limit 2 --max-pages 2
 node cli.mjs search --url https://earth-search.aws.element84.com/v1/search --bbox 120,30,121,31 --collection sentinel-2-l2a --method POST --filter-file test-fixtures/cloud-cover-filter.json --limit 1
+node cli.mjs search --url https://earth-search.aws.element84.com/v1/search --intersects-file test-fixtures/search-area.geojson --collection sentinel-2-l2a --method POST --limit 1
+node cli.mjs assets --url https://earth-search.aws.element84.com/v1/search --bbox 120,30,121,31 --collection sentinel-2-l2a --limit 1 --role data
 ```
 
 `npm test` 会先编译 MoonBit JS 桥接模块。首次单独运行 CLI 之前先执行 `npm run build`。上面的在线查询已实际执行过。`search` 输出 JSON，其中 `items` 为扁平列表，`pages` 为实际读取页数，`hasMore` 表示达到页数上限时仍有下一页。
 
-`search` 可用参数：`--url`、`--bbox west,south,east,north`、`--datetime`、可重复的 `--collection`、可重复的 `--id`、`--filter-file`、`--limit`、`--method GET|POST`、`--max-pages`。`--bbox` 可省略，例如仅按 Item ID 查询。`--filter-file` 读取 CQL2 JSON 表达式，需搭配 `--method POST`。默认 GET、每页 10 条、最多 5 页。`--url` 指向具体的 `/search` 端点。`collections` 使用 `--url` 和可选 `--max-pages`。分页默认只允许同源 URL；如确需访问跨源 `next` 链接，可显式指定 `--allow-cross-origin true`。命令不会下载资产文件。
+`search` 可用参数：`--url`、`--bbox west,south,east,north`、`--intersects-file geometry.json`、`--datetime`、可重复的 `--collection`、可重复的 `--id`、`--filter-file`、`--limit`、`--method GET|POST`、`--max-pages`。`--bbox` 可省略，例如仅按 Item ID 查询；与 `--intersects-file` 互斥。`--intersects-file` 接收 GeoJSON **Geometry**（不是 Feature），需搭配 `--method POST`。`--filter-file` 读取 CQL2 JSON 表达式，也需搭配 POST。默认 GET、每页 10 条、最多 5 页。`--url` 指向具体的 `/search` 端点。`collections` 使用 `--url` 和可选 `--max-pages`。分页默认只允许同源 URL；如确需访问跨源 `next` 链接，可显式指定 `--allow-cross-origin true`。命令不会下载资产文件。
+
+`assets` 命令接受相同搜索参数，并额外支持可重复的 `--asset <key>` 和 `--role <role>`；输出匹配的 Item ID、集合、时间、资产 key、标题、媒体类型、角色和绝对 URL。相对资产地址先以 Item 的 `self` 链接为基准；缺少 `self` 时以返回该 Item 的搜索页地址为基准。输出仅是清单，不下载数据。`search` 同时保留资产的原始 `href`，并给出 `resolvedHref`。
 
 ## 支持范围
 
 - 解析 ItemCollection / STAC Item，检查 `stac_version`、`type`、`id`、GeoJSON 几何坐标层级与多边形闭合、`bbox`、RFC 3339 时间或时间区间、`links`、`assets[*].href` 等关键结构；输出保留几何和完整 `properties`。
 - 解析 STAC API 根目录与 Collections 页，发现搜索/集合入口并列出集合 ID、标题、说明、许可。
-- 生成包含可选 `bbox`、`datetime`、`collections`、`ids`、`limit` 的 Item Search 请求；验证经纬度范围和边界框顺序。
+- 生成包含可选 `bbox`、GeoJSON `intersects`、`datetime`、`collections`、`ids`、`limit` 的 Item Search 请求；验证经纬度范围、边界框顺序与 GeoJSON 几何结构。
 - 支持一组明确的 CQL2 JSON 操作符（比较、`between`、`and`、`or`、`not`），可按 `eo:cloud_cover` 等 Item 属性过滤；不支持的操作符会明确报错。
 - 处理 GET/POST `next` 链接、相对地址、`body`、`headers` 和 `merge`；限制页数并检测重复请求。
+- 从资产中提取标题、媒体类型、角色及 Item `self` 链接，生成可筛选的资产清单。
 - MoonBit 公共 API：`parse_item`、`parse_page`、`parse_landing`、`parse_collections`、`search_body`；JS 桥接 API：`search_request`、`page_summary`、`landing_summary`、`collections_summary`。
 
-当前不检查 GeoJSON 自交与环方向、扩展 Schema、所有 STAC Item 字段语义，也不支持完整 CQL2、intersects、排序或字段选择。资产链接保持 API 原始值，可能是相对路径。API 认证及速率限制由调用环境处理。不要把 `validate` 的通过结果视为完整 STAC 合规证明。
+当前不检查 GeoJSON 自交与环方向、扩展 Schema、所有 STAC Item 字段语义，也不支持完整 CQL2、排序或字段选择。`validate` 输出的资产链接仍是原始值；`search` 和 `assets` 增加绝对地址解析。API 认证及速率限制由调用环境处理。不要把 `validate` 的通过结果视为完整 STAC 合规证明。
 
 ## 选题与依据
 

@@ -35,6 +35,9 @@ pub(all) suberror StacError {
 pub(all) struct Asset {
   key : String
   href : String
+  title : String?
+  media_type : String?
+  roles : Array[String]
 } derive(Eq, @debug.Debug)
 
 pub(all) struct Collection {
@@ -51,6 +54,7 @@ pub(all) struct CollectionPage {
 
 pub(all) struct Item {
   id : String
+  self_href : String?
   collection : String?
   datetime : String?
   geometry : Json

@@ -4,7 +4,7 @@ import {pathToFileURL} from 'node:url';
 import {collections_summary, landing_summary, page_summary, search_request} from './_build/js/release/build/bridge/bridge.js';
 
 function options(args) {
-  const result = {collections: [], ids: []};
+  const result = {collections: [], ids: [], assets: [], roles: []};
   for (let i = 0; i < args.length; i++) {
     const key = args[i];
     if (!key.startsWith('--')) throw new Error(`Unexpected argument: ${key}`);
@@ -12,6 +12,8 @@ function options(args) {
     if (value === undefined || value.startsWith('--')) throw new Error(`Missing value for ${key}`);
     if (key === '--collection') result.collections.push(value);
     else if (key === '--id') result.ids.push(value);
+    else if (key === '--asset') result.assets.push(value);
+    else if (key === '--role') result.roles.push(value);
     else result[key.slice(2)] = value;
   }
   return result;
@@ -73,7 +75,7 @@ function queryBody(opts) {
   if (bbox?.some(n => !Number.isFinite(n))) throw new Error('Invalid bbox number');
   const result = JSON.parse(search_request(JSON.stringify({
     bbox, collections: opts.collections, ids: opts.ids?.length ? opts.ids : undefined,
-    datetime: opts.datetime, filter: opts.filter,
+    datetime: opts.datetime, filter: opts.filter, intersects: opts.intersects,
     limit: opts.limit === undefined ? 10 : Number(opts.limit),
   })));
   if (result.status !== 'ok') throw new Error(`Invalid search: ${result.message}`);
@@ -92,6 +94,7 @@ export async function search(opts, fetchImpl = fetch) {
   const allowExternal = allowCrossOrigin(opts['allow-cross-origin']);
   const body = queryBody(opts);
   if (body.filter && method !== 'POST') throw new Error('CQL2 JSON filter requires --method POST');
+  if (body.intersects && method !== 'POST') throw new Error('GeoJSON intersects requires --method POST');
   if (method === 'GET') {
     if (body.bbox) url.searchParams.set('bbox', body.bbox.join(','));
     url.searchParams.set('limit', String(body.limit));
@@ -129,7 +132,14 @@ export async function search(opts, fetchImpl = fetch) {
     if (!response.ok) throw new Error(`STAC API returned HTTP ${response.status} at ${pageUrl.href}`);
     const page = validateText(await response.text());
     pages++;
-    items.push(...page.items);
+    for (const item of page.items) {
+      const itemBase = item.self ? new URL(item.self, pageUrl) : pageUrl;
+      item.assets = item.assets.map(asset => ({
+        ...asset,
+        resolvedHref: new URL(asset.href, itemBase).href,
+      }));
+      items.push(item);
+    }
     previousBody = currentBody;
     previousHeaders = headers;
     next = page.next && {
@@ -141,6 +151,24 @@ export async function search(opts, fetchImpl = fetch) {
     };
   }
   return {items, pages, hasMore: next !== null};
+}
+
+export function assetManifest(result, opts = {}) {
+  const assetKeys = new Set(opts.assets ?? []);
+  const roles = new Set(opts.roles ?? []);
+  const assets = [];
+  for (const item of result.items) {
+    for (const asset of item.assets) {
+      if (assetKeys.size && !assetKeys.has(asset.key)) continue;
+      if (roles.size && !(asset.roles ?? []).some(role => roles.has(role))) continue;
+      assets.push({
+        itemId: item.id, collection: item.collection, datetime: item.datetime,
+        key: asset.key, href: asset.resolvedHref ?? asset.href,
+        title: asset.title, type: asset.type, roles: asset.roles,
+      });
+    }
+  }
+  return {assets, pages: result.pages, hasMore: result.hasMore};
 }
 
 export async function main(args) {
@@ -158,13 +186,15 @@ export async function main(args) {
     if (!opts.url) throw new Error('Usage: node cli.mjs collections --url <collections-endpoint> [--max-pages N]');
     const maxPages = opts['max-pages'] === undefined ? 5 : Number(opts['max-pages']);
     console.log(JSON.stringify(await listCollections(opts.url, maxPages, fetch, allowCrossOrigin(opts['allow-cross-origin'])), null, 2));
-  } else if (command === 'search') {
+  } else if (command === 'search' || command === 'assets') {
     const opts = options(rest);
-    if (!opts.url) throw new Error('Usage: node cli.mjs search --url <search-endpoint> [--bbox west,south,east,north] [--datetime ...] [--collection ...] [--id ...] [--limit N] [--method GET|POST] [--max-pages N]');
+    if (!opts.url) throw new Error('Usage: node cli.mjs <search|assets> --url <search-endpoint> [--bbox west,south,east,north|--intersects-file geometry.json] [--datetime ...] [--collection ...] [--id ...] [--limit N] [--method GET|POST] [--max-pages N]');
     if (opts['filter-file']) opts.filter = JSON.parse(await readFile(opts['filter-file'], 'utf8'));
-    console.log(JSON.stringify(await search(opts), null, 2));
+    if (opts['intersects-file']) opts.intersects = JSON.parse(await readFile(opts['intersects-file'], 'utf8'));
+    const result = await search(opts);
+    console.log(JSON.stringify(command === 'assets' ? assetManifest(result, opts) : result, null, 2));
   } else {
-    throw new Error('Usage: node cli.mjs <discover|collections|validate|search> ...');
+    throw new Error('Usage: node cli.mjs <discover|collections|validate|search|assets> ...');
   }
 }
 

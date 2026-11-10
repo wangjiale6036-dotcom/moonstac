@@ -7,11 +7,15 @@ pub(all) suberror StacError {
 pub(all) struct Asset {
   key : String
   href : String
+  title : String?
+  media_type : String?
+  roles : Array[String]
 } derive(Debug, Eq)
 
 ///|
 pub(all) struct Item {
   id : String
+  self_href : String?
   collection : String?
   datetime : String?
   geometry : Json
@@ -70,6 +74,16 @@ pub fn parse_item_json(v : Json) -> Item raise StacError {
     raise Invalid("expected Feature")
   }
   let id = string_field(v, "id")
+  let mut self_href : String? = None
+  match field(v, "links") {
+    Some(Array(links)) =>
+      for link in links {
+        if optional_string(link, "rel") == Some("self") {
+          self_href = Some(string_field(link, "href"))
+        }
+      }
+    _ => ()
+  }
   let collection = optional_string(v, "collection")
   validate_item_shape(v, collection)
   let properties = match field(v, "properties") {
@@ -88,9 +102,26 @@ pub fn parse_item_json(v : Json) -> Item raise StacError {
   }
   let assets : Array[Asset] = []
   for key, data in entries {
-    assets.push({ key, href: string_field(data, "href") })
+    let roles : Array[String] = []
+    match field(data, "roles") {
+      Some(Array(values)) =>
+        for value in values {
+          match value {
+            String(role) => roles.push(role)
+            _ => ()
+          }
+        }
+      _ => ()
+    }
+    assets.push({
+      key,
+      href: string_field(data, "href"),
+      title: optional_string(data, "title"),
+      media_type: optional_string(data, "type"),
+      roles,
+    })
   }
-  { id, collection, datetime, geometry, bbox, properties, assets }
+  { id, self_href, collection, datetime, geometry, bbox, properties, assets }
 }
 
 ///|
@@ -214,6 +245,16 @@ fn search_request_checked(input : String) -> String raise StacError {
     }
     _ => raise Invalid("invalid bbox")
   }
+  match field(v, "intersects") {
+    None => ()
+    Some(geometry) => {
+      if field(v, "bbox") != None {
+        raise Invalid("bbox and intersects are mutually exclusive")
+      }
+      validate_geojson_geometry(geometry, 0)
+      out["intersects"] = geometry
+    }
+  }
   let collections : Array[String] = []
   match field(v, "collections") {
     None => ()
@@ -317,11 +358,31 @@ fn page_summary_checked(input : String) -> String raise StacError {
   for item in page.items {
     let assets : Array[Json] = []
     for asset in item.assets {
-      let entry : Json = { "key": asset.key, "href": asset.href }
+      let roles : Array[Json] = []
+      for role in asset.roles {
+        roles.push(Json::string(role))
+      }
+      let entry : Json = {
+        "key": asset.key,
+        "href": asset.href,
+        "title": match asset.title {
+          Some(s) => Json::string(s)
+          None => Json::null()
+        },
+        "type": match asset.media_type {
+          Some(s) => Json::string(s)
+          None => Json::null()
+        },
+        "roles": Json::array(roles),
+      }
       assets.push(entry)
     }
     let entry : Json = {
       "id": item.id,
+      "self": match item.self_href {
+        Some(s) => Json::string(s)
+        None => Json::null()
+      },
       "collection": match item.collection {
         Some(s) => Json::string(s)
         None => Json::null()

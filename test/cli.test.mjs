@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {discover, listCollections, search, validateText} from '../cli.mjs';
+import {assetManifest, discover, listCollections, search, validateText} from '../cli.mjs';
 
 function item(id) {
   return {
@@ -133,4 +133,36 @@ test('rejects invalid query and pagination cycle', async () => {
   await assert.rejects(() => search({url: 'https://example.com/search', bbox: '120,30,121,31'}, repeating), /Pagination cycle/);
   const external = async () => ({ok: true, text: async () => page('one', {rel: 'next', href: 'https://other.example/search'})});
   await assert.rejects(() => search({url: 'https://example.com/search', bbox: '120,30,121,31'}, external), /Cross-origin pagination blocked/);
+});
+
+test('POST intersects search accepts GeoJSON and rejects a simultaneous bbox', async () => {
+  const intersects = {type: 'Polygon', coordinates: [[[120, 30], [121, 30], [121, 31], [120, 30]]]};
+  let sent;
+  const transport = async (_url, request) => {
+    sent = JSON.parse(request.body);
+    return {ok: true, text: async () => page('inside')};
+  };
+  await search({url: 'https://example.com/search', method: 'POST', intersects}, transport);
+  assert.deepEqual(sent.intersects, intersects);
+  await assert.rejects(() => search({url: 'https://example.com/search', intersects}, transport), /requires --method POST/);
+  await assert.rejects(() => search({url: 'https://example.com/search', method: 'POST', intersects, bbox: '120,30,121,31'}, transport), /mutually exclusive/);
+  await assert.rejects(() => search({url: 'https://example.com/search', method: 'POST', intersects: {type: 'Polygon', coordinates: [[[120,30],[121,30],[121,31],[120,31]]]}}, transport), /linear ring is not closed/);
+});
+
+test('asset manifest resolves links against Item self and filters role', async () => {
+  const feature = item('scene-1');
+  feature.links = [{rel: 'self', href: '../items/scene-1.json'}];
+  feature.assets = {
+    visual: {href: 'preview.png', type: 'image/png', title: 'Preview', roles: ['overview']},
+    data: {href: '../raster/data.tif', type: 'image/tiff', roles: ['data']},
+  };
+  const transport = async () => ({ok: true, text: async () => JSON.stringify({type: 'FeatureCollection', features: [feature], links: []})});
+  const result = await search({url: 'https://example.com/api/search'}, transport);
+  const manifest = assetManifest(result, {roles: ['data']});
+  assert.equal(manifest.assets.length, 1);
+  assert.equal(manifest.assets[0].key, 'data');
+  assert.equal(manifest.assets[0].href, 'https://example.com/raster/data.tif');
+  assert.equal(manifest.assets[0].type, 'image/tiff');
+  assert.equal(manifest.pages, 1);
+  assert.equal(assetManifest(result, {assets: ['visual']}).assets[0].href, 'https://example.com/items/preview.png');
 });

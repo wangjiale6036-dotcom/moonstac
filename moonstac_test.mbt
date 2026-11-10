@@ -112,3 +112,26 @@ test "reject datetime without timezone" {
   let result = @moonstac.page_summary(page_with_datetime("2026-11-01T00:00:00"))
   assert_true(result.contains("invalid datetime length"))
 }
+
+///|
+test "extract asset metadata and item self link" {
+  let item = @moonstac.parse_item(
+    "{\"stac_version\":\"1.0.0\",\"type\":\"Feature\",\"id\":\"scene\",\"geometry\":null,\"properties\":{\"datetime\":\"2026-11-01T00:00:00Z\"},\"links\":[{\"rel\":\"self\",\"href\":\"../items/scene.json\"}],\"assets\":{\"visual\":{\"href\":\"visual.png\",\"title\":\"Preview\",\"type\":\"image/png\",\"roles\":[\"overview\"]}}}",
+  )
+  assert_eq(item.self_href, Some("../items/scene.json"))
+  assert_eq(item.assets[0].title, Some("Preview"))
+  assert_eq(item.assets[0].media_type, Some("image/png"))
+  assert_eq(item.assets[0].roles[0], "overview")
+}
+
+///|
+test "search request accepts intersects and rejects bbox conflict" {
+  let geometry = "{\"type\":\"Point\",\"coordinates\":[120,30]}"
+  let result = @moonstac.search_request("{\"intersects\":" + geometry + "}")
+  assert_true(result.contains("\"status\":\"ok\""))
+  assert_true(result.contains("intersects"))
+  let conflict = @moonstac.search_request(
+    "{\"bbox\":[120,30,121,31],\"intersects\":" + geometry + "}",
+  )
+  assert_true(conflict.contains("mutually exclusive"))
+}
