@@ -53,6 +53,9 @@ pub(all) struct Item {
   id : String
   collection : String?
   datetime : String?
+  geometry : Json
+  bbox : Json?
+  properties : Json
   assets : Array[Asset]
 } derive(Eq, @debug.Debug)
 

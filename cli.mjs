@@ -17,6 +17,12 @@ function options(args) {
   return result;
 }
 
+function allowCrossOrigin(value) {
+  if (value === undefined || value === 'false') return false;
+  if (value === 'true') return true;
+  throw new Error('--allow-cross-origin must be true or false');
+}
+
 export function validateText(text) {
   const result = JSON.parse(page_summary(text));
   if (result.status !== 'ok') throw new Error(`Invalid STAC ItemCollection: ${result.message}`);
@@ -26,7 +32,7 @@ export function validateText(text) {
 export async function discover(url, fetchImpl = fetch) {
   const target = new URL(url);
   if (!['http:', 'https:'].includes(target.protocol)) throw new Error('URL must use HTTP or HTTPS');
-  const response = await fetchImpl(target);
+  const response = await fetchImpl(target, {redirect: 'error'});
   if (!response.ok) throw new Error(`STAC API returned HTTP ${response.status} at ${target.href}`);
   const result = JSON.parse(landing_summary(await response.text()));
   if (result.status !== 'ok') throw new Error(`Invalid STAC landing page: ${result.message}`);
@@ -36,7 +42,7 @@ export async function discover(url, fetchImpl = fetch) {
   return result;
 }
 
-export async function listCollections(url, maxPages = 5, fetchImpl = fetch) {
+export async function listCollections(url, maxPages = 5, fetchImpl = fetch, allowExternal = false) {
   const start = new URL(url);
   if (!['http:', 'https:'].includes(start.protocol)) throw new Error('URL must use HTTP or HTTPS');
   if (!Number.isSafeInteger(maxPages) || maxPages < 1 || maxPages > 100) {
@@ -48,9 +54,10 @@ export async function listCollections(url, maxPages = 5, fetchImpl = fetch) {
   let pages = 0;
   while (next && pages < maxPages) {
     if (!['http:', 'https:'].includes(next.protocol)) throw new Error('Pagination URL must use HTTP or HTTPS');
+    if (!allowExternal && next.origin !== start.origin) throw new Error('Cross-origin pagination blocked');
     if (seen.has(next.href)) throw new Error('Collection pagination cycle detected');
     seen.add(next.href);
-    const response = await fetchImpl(next);
+    const response = await fetchImpl(next, {redirect: 'error'});
     if (!response.ok) throw new Error(`STAC API returned HTTP ${response.status} at ${next.href}`);
     const page = JSON.parse(collections_summary(await response.text()));
     if (page.status !== 'ok') throw new Error(`Invalid STAC Collections page: ${page.message}`);
@@ -65,7 +72,8 @@ function queryBody(opts) {
   const bbox = opts.bbox?.split(',').map(Number);
   if (bbox?.some(n => !Number.isFinite(n))) throw new Error('Invalid bbox number');
   const result = JSON.parse(search_request(JSON.stringify({
-    bbox, collections: opts.collections, ids: opts.ids?.length ? opts.ids : undefined, datetime: opts.datetime,
+    bbox, collections: opts.collections, ids: opts.ids?.length ? opts.ids : undefined,
+    datetime: opts.datetime, filter: opts.filter,
     limit: opts.limit === undefined ? 10 : Number(opts.limit),
   })));
   if (result.status !== 'ok') throw new Error(`Invalid search: ${result.message}`);
@@ -81,7 +89,9 @@ export async function search(opts, fetchImpl = fetch) {
   }
   const url = new URL(opts.url);
   if (!['http:', 'https:'].includes(url.protocol)) throw new Error('URL must use HTTP or HTTPS');
+  const allowExternal = allowCrossOrigin(opts['allow-cross-origin']);
   const body = queryBody(opts);
+  if (body.filter && method !== 'POST') throw new Error('CQL2 JSON filter requires --method POST');
   if (method === 'GET') {
     if (body.bbox) url.searchParams.set('bbox', body.bbox.join(','));
     url.searchParams.set('limit', String(body.limit));
@@ -98,6 +108,7 @@ export async function search(opts, fetchImpl = fetch) {
   while (next && pages < maxPages) {
     const pageUrl = new URL(next.href, url);
     if (!['http:', 'https:'].includes(pageUrl.protocol)) throw new Error('Pagination URL must use HTTP or HTTPS');
+    if (!allowExternal && pageUrl.origin !== url.origin) throw new Error('Cross-origin pagination blocked');
     const requestMethod = next.method.toUpperCase();
     const currentBody = requestMethod === 'POST'
       ? (next.merge ? {...previousBody, ...next.body} : next.body) : null;
@@ -113,6 +124,7 @@ export async function search(opts, fetchImpl = fetch) {
       method: requestMethod,
       headers,
       body: requestBody,
+      redirect: 'error',
     });
     if (!response.ok) throw new Error(`STAC API returned HTTP ${response.status} at ${pageUrl.href}`);
     const page = validateText(await response.text());
@@ -145,10 +157,11 @@ export async function main(args) {
     const opts = options(rest);
     if (!opts.url) throw new Error('Usage: node cli.mjs collections --url <collections-endpoint> [--max-pages N]');
     const maxPages = opts['max-pages'] === undefined ? 5 : Number(opts['max-pages']);
-    console.log(JSON.stringify(await listCollections(opts.url, maxPages), null, 2));
+    console.log(JSON.stringify(await listCollections(opts.url, maxPages, fetch, allowCrossOrigin(opts['allow-cross-origin'])), null, 2));
   } else if (command === 'search') {
     const opts = options(rest);
     if (!opts.url) throw new Error('Usage: node cli.mjs search --url <search-endpoint> [--bbox west,south,east,north] [--datetime ...] [--collection ...] [--id ...] [--limit N] [--method GET|POST] [--max-pages N]');
+    if (opts['filter-file']) opts.filter = JSON.parse(await readFile(opts['filter-file'], 'utf8'));
     console.log(JSON.stringify(await search(opts), null, 2));
   } else {
     throw new Error('Usage: node cli.mjs <discover|collections|validate|search> ...');

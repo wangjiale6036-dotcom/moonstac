@@ -24,7 +24,7 @@ fn validate_item_shape(v : Json, collection : String?) -> Unit raise StacError {
         raise Invalid("bbox must be absent when geometry is null")
       }
     Object(_) => {
-      validate_geometry(geometry)
+      validate_geojson_geometry(geometry, 0)
       validate_bbox(v)
     }
     _ => raise Invalid("invalid geometry")
@@ -94,63 +94,24 @@ fn validate_bbox(v : Json) -> Unit raise StacError {
 }
 
 ///|
-fn validate_geometry(v : Json) -> Unit raise StacError {
-  let kind = string_field(v, "type")
-  if kind == "GeometryCollection" {
-    let parts = match field(v, "geometries") {
-      Some(Array(xs)) => xs
-      _ => raise Invalid("invalid geometries")
-    }
-    for part in parts {
-      validate_geometry(part)
-    }
-  } else {
-    if kind != "Point" &&
-      kind != "MultiPoint" &&
-      kind != "LineString" &&
-      kind != "MultiLineString" &&
-      kind != "Polygon" &&
-      kind != "MultiPolygon" {
-      raise Invalid("invalid geometry type")
-    }
-    let coordinates = match field(v, "coordinates") {
-      Some(value) => value
-      None => raise Invalid("missing coordinates")
-    }
-    validate_coordinates(coordinates, 0)
-  }
-}
-
-///|
-fn validate_coordinates(value : Json, depth : Int) -> Unit raise StacError {
-  if depth > 8 {
-    raise Invalid("coordinates too deeply nested")
-  }
-  match value {
-    Array(xs) => {
-      if xs.length() == 0 {
-        raise Invalid("empty coordinates")
-      }
-      for part in xs {
-        validate_coordinates(part, depth + 1)
-      }
-    }
-    Number(_, ..) => ()
-    _ => raise Invalid("invalid coordinates")
-  }
-}
-
-///|
 fn validate_item_time(properties : Json) -> Unit raise StacError {
   let datetime = optional_string(properties, "datetime")
   match datetime {
-    Some(s) if s != "" => ()
-    _ =>
-      if !(field(properties, "datetime") is Some(Null)) ||
-        optional_string(properties, "start_datetime") == None ||
-        optional_string(properties, "end_datetime") == None {
+    Some(s) if s != "" => validate_timestamp(s)
+    _ => {
+      if !(field(properties, "datetime") is Some(Null)) {
         raise Invalid("missing datetime or interval")
       }
+      let start = optional_string(properties, "start_datetime")
+      let end = optional_string(properties, "end_datetime")
+      match (start, end) {
+        (Some(s), Some(e)) => {
+          validate_timestamp(s)
+          validate_timestamp(e)
+        }
+        _ => raise Invalid("missing datetime or interval")
+      }
+    }
   }
 }
 

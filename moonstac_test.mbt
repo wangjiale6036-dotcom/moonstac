@@ -51,3 +51,64 @@ test "reject collection id without collection link" {
   )
   assert_true(result.contains("\"status\":\"invalid\""))
 }
+
+///|
+fn page_with_geometry(geometry : String) -> String {
+  "{\"type\":\"FeatureCollection\",\"features\":[{\"stac_version\":\"1.0.0\",\"type\":\"Feature\",\"id\":\"g\",\"geometry\":" +
+  geometry +
+  ",\"bbox\":[0,0,1,1],\"properties\":{\"datetime\":\"2026-11-01T00:00:00Z\"},\"links\":[],\"assets\":{}}],\"links\":[]}"
+}
+
+///|
+test "accept closed GeoJSON polygon" {
+  let text = page_with_geometry(
+    "{\"type\":\"Polygon\",\"coordinates\":[[[0,0],[1,0],[1,1],[0,0]]]}",
+  )
+  let result = @moonstac.page_summary(text)
+  assert_true(result.contains("\"status\":\"ok\""))
+}
+
+///|
+test "reject open GeoJSON polygon ring" {
+  let text = page_with_geometry(
+    "{\"type\":\"Polygon\",\"coordinates\":[[[0,0],[1,0],[1,1],[0,1]]]}",
+  )
+  let result = @moonstac.page_summary(text)
+  assert_true(result.contains("linear ring is not closed"))
+}
+
+///|
+test "reject malformed GeoJSON point coordinates" {
+  let text = page_with_geometry("{\"type\":\"Point\",\"coordinates\":[[0,0]]}")
+  let result = @moonstac.page_summary(text)
+  assert_true(result.contains("position must have two or three numbers"))
+}
+
+///|
+fn page_with_datetime(datetime : String) -> String {
+  "{\"type\":\"FeatureCollection\",\"features\":[{\"stac_version\":\"1.0.0\",\"type\":\"Feature\",\"id\":\"t\",\"geometry\":null,\"properties\":{\"datetime\":\"" +
+  datetime +
+  "\"},\"links\":[],\"assets\":{}}],\"links\":[]}"
+}
+
+///|
+test "accept leap day RFC3339 datetime" {
+  let result = @moonstac.page_summary(
+    page_with_datetime("2024-02-29T23:59:59.123+08:00"),
+  )
+  assert_true(result.contains("\"status\":\"ok\""))
+}
+
+///|
+test "reject invalid calendar date" {
+  let result = @moonstac.page_summary(
+    page_with_datetime("2026-02-29T00:00:00Z"),
+  )
+  assert_true(result.contains("datetime component out of range"))
+}
+
+///|
+test "reject datetime without timezone" {
+  let result = @moonstac.page_summary(page_with_datetime("2026-11-01T00:00:00"))
+  assert_true(result.contains("invalid datetime length"))
+}

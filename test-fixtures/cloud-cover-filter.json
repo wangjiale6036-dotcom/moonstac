@@ -1,0 +1,7 @@
+{
+  "op": "<=",
+  "args": [
+    {"property": "eo:cloud_cover"},
+    20
+  ]
+}

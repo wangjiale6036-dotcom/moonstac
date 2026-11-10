@@ -14,6 +14,9 @@ pub(all) struct Item {
   id : String
   collection : String?
   datetime : String?
+  geometry : Json
+  bbox : Json?
+  properties : Json
   assets : Array[Asset]
 } derive(Debug, Eq)
 
@@ -74,6 +77,11 @@ pub fn parse_item_json(v : Json) -> Item raise StacError {
     _ => raise Invalid("invalid properties")
   }
   let datetime = optional_string(properties, "datetime")
+  let geometry = match field(v, "geometry") {
+    Some(value) => value
+    None => raise Invalid("missing geometry")
+  }
+  let bbox = field(v, "bbox")
   let entries = match field(v, "assets") {
     Some(Object(m)) => m
     _ => raise Invalid("invalid assets")
@@ -82,7 +90,7 @@ pub fn parse_item_json(v : Json) -> Item raise StacError {
   for key, data in entries {
     assets.push({ key, href: string_field(data, "href") })
   }
-  { id, collection, datetime, assets }
+  { id, collection, datetime, geometry, bbox, properties, assets }
 }
 
 ///|
@@ -242,6 +250,14 @@ fn search_request_checked(input : String) -> String raise StacError {
     }
     _ => raise Invalid("invalid ids")
   }
+  match field(v, "filter") {
+    None => ()
+    Some(filter) => {
+      validate_cql2_filter(filter, 0)
+      out["filter"] = filter
+      out["filter-lang"] = Json::string("cql2-json")
+    }
+  }
   let limit = match field(v, "limit") {
     Some(Number(n, ..)) => {
       let parsed = n.to_int()
@@ -314,6 +330,12 @@ fn page_summary_checked(input : String) -> String raise StacError {
         Some(s) => Json::string(s)
         None => Json::null()
       },
+      "geometry": item.geometry,
+      "bbox": match item.bbox {
+        Some(v) => v
+        None => Json::null()
+      },
+      "properties": item.properties,
       "assets": Json::array(assets),
     }
     items.push(entry)

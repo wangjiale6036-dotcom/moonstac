@@ -112,9 +112,25 @@ test('POST pagination merges body and headers when requested', async () => {
   assert.equal(seen[1].headers['x-page-token'], 'page-2');
 });
 
+test('POST search builds CQL2 JSON filter in MoonBit', async () => {
+  let sent;
+  const transport = async (_url, request) => {
+    sent = JSON.parse(request.body);
+    return {ok: true, text: async () => page('scene-1')};
+  };
+  const filter = {op: '<=', args: [{property: 'eo:cloud_cover'}, 20]};
+  await search({url: 'https://example.com/search', bbox: '120,30,121,31', method: 'POST', filter}, transport);
+  assert.deepEqual(sent.filter, filter);
+  assert.equal(sent['filter-lang'], 'cql2-json');
+  await assert.rejects(() => search({url: 'https://example.com/search', filter}), /requires --method POST/);
+  await assert.rejects(() => search({url: 'https://example.com/search', method: 'POST', filter: {op: 'eval', args: []}}), /unsupported CQL2 operator/);
+});
+
 test('rejects invalid query and pagination cycle', async () => {
   await assert.rejects(() => search({url: 'https://example.com/search', bbox: '181,0,182,1'}), /Invalid search/);
   await assert.rejects(() => search({url: 'https://example.com/search', limit: '1.5'}), /Invalid search/);
   const repeating = async () => ({ok: true, text: async () => page('repeat', {rel: 'next', href: '/search?bbox=120%2C30%2C121%2C31&limit=10'})});
   await assert.rejects(() => search({url: 'https://example.com/search', bbox: '120,30,121,31'}, repeating), /Pagination cycle/);
+  const external = async () => ({ok: true, text: async () => page('one', {rel: 'next', href: 'https://other.example/search'})});
+  await assert.rejects(() => search({url: 'https://example.com/search', bbox: '120,30,121,31'}, external), /Cross-origin pagination blocked/);
 });
