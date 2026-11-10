@@ -1,110 +1,92 @@
-# MoonSTAC 项目申报书（详细版）
+# MoonSTAC 项目申报书
 
-> 2026 年 11 月 MoonBit 黑客松。本文说明当前已实现的 MVP，供申报与项目评审参考。赛事报名表由参赛者本人填写；截至本文更新时，**尚未提交官方报名表**。
+**状态：2026 年 11 月黑客松待提交稿。** 本文按此前 MoonSHACL、MoonPMTiles 申报书的八节结构编写。GitHub 已有可运行 MVP、测试与持续集成；赛事表单由申报人本人填写，目前尚未提交。Mooncakes 0.1.0 是早期预览版，新增的 GeoJSON 区域查询和资产清单只在 GitHub 当前源码中。
 
-## 1. 项目基本信息
+## 一、项目名称与申报人
 
-| 项目 | 内容 |
-| --- | --- |
-| 名称 | MoonSTAC：MoonBit 原生 STAC 搜索核心与资产清单工具 |
-| 申报人 | 王嘉乐，GitHub ID `wangjiale6036-dotcom`，个人项目 |
-| 代码仓库 | <https://github.com/wangjiale6036-dotcom/moonstac> |
-| Mooncakes | <https://mooncakes.io/docs/wangjiale6036-dotcom/moonstac@0.1.0>（早期预览版；GitHub 的新增功能尚未发布到该版本） |
-| 许可证 | Apache-2.0 |
-| 实现语言 | MoonBit 核心；Node.js 仅承担 HTTP 和文件读写 |
+项目名称：**MoonSTAC——MoonBit 原生 STAC Item Search 核心与资产清单工具**。
 
-## 2. 要解决什么问题
+申报人：王嘉乐；GitHub ID：`wangjiale6036-dotcom`。本公开版本不收录私人联系方式。
 
-遥感影像、土地覆盖、环境监测等数据通常分散在不同目录服务中。STAC（SpatioTemporal Asset Catalog）用统一的 Item、Collection、Asset 结构描述这些数据，STAC API Item Search 则提供按空间、时间、集合和属性发现数据的接口。MoonBit 开发者若要使用这些公开目录，需要处理查询构造、ItemCollection 解析、分页、相对链接和异常数据等工作。
+参赛类型：拟申报 2026 年 11 月 MoonBit 黑客松，新项目、个人参赛。项目自有代码采用 Apache-2.0 许可证。[公开仓库][repo]已包含当前 MVP；[Mooncakes 0.1.0][package]对应较早的开发预览，不代表本次新增功能已发行。
 
-MoonSTAC 提供一条完整的最小工作链：**连接 STAC API → 发现搜索和集合入口 → 构造查询 → 分页获取场景 → 提取可用资产地址**。这让下游 MoonBit 程序可以把检索到的资产交给影像分析、下载或展示模块；本项目自身不下载影像。
+## 二、项目简介
 
-目标用户是编写地理空间或遥感应用的 MoonBit 开发者，以及需要用 CLI 快速检索开放 STAC 服务的使用者。项目目前聚焦 Item Search，不宣称实现整个 STAC 标准族。
+STAC（SpatioTemporal Asset Catalog）用标准化的 Item、Collection 和 Asset 描述遥感影像及其他时空数据。使用者通常需要先发现可用集合，再按空间、时间或属性检索 Item，最后从 Item 找到数据资产。不同 STAC API 的分页链接可能是 GET 或 POST，地址可能是相对路径，下一页请求还可能携带请求体和请求头。这些细节使一次目录查询变成多步处理。
 
-## 3. MVP 已完成的能力
+MoonSTAC 提供可嵌入 MoonBit 程序的解析与查询核心，以及可直接操作公开 STAC 服务的 Node.js 命令行工具。用户可以发现 API 入口、浏览集合、进行 `bbox` 或 GeoJSON 区域搜索、加上时间、集合、Item ID 与 CQL2 属性条件，跨页读取结果，并按资产 key 或 role 输出含绝对 URL 的清单。工具只返回目录元数据和地址，不下载影像内容。
 
-### 3.1 服务发现与集合浏览
+STAC 结构检查、GeoJSON 与时间边界检查、查询体构造以及 `next` 链接解释由 MoonBit 完成，并在 JavaScript、Wasm-GC、Native 三目标下测试。Node.js 负责网络和文件 I/O、URL 解析及 CLI 接线。当前是 Item Search 的可运行子集，不是完整 STAC Schema 验证器。
 
-- 解析 STAC API landing page，从 `links` 中取得搜索入口和集合列表入口，处理相对 URL。
-- 分页读取 Collections，提取集合 ID、标题、描述、许可证等基础信息。
-- 对 HTTP 错误、无效 JSON、字段缺失及集合分页循环给出明确错误。
+## 三、方向、通用性与独立价值
 
-### 3.2 查询构造与分页搜索
+方向为 MoonBit 基础工具库与地理空间数据目录接入。STAC 是跨机构使用的公开目录接口；如果 MoonBit 应用需要查找卫星场景，使用统一查询和 Item 结构比为单个服务编写固定字段适配更容易复用。典型下游包括遥感影像筛选、地理分析流水线、数据浏览器和公开数据目录的自动化检查。MoonSTAC 提供“找到哪份数据及其地址”的前置能力，后续下载、影像解码或渲染由其他组件承担。
 
-- 支持 GET/POST Item Search；参数包括经纬度 `bbox`、GeoJSON `intersects`、时间、集合、Item ID、每页条数。
-- `intersects` 由 MoonBit 检查 GeoJSON 几何结构，并与 `bbox` 互斥；CLI 通过 `--intersects-file` 读取几何文件，用 POST 发送。
-- 支持 CQL2 JSON 的比较、`between`、`and`、`or`、`not` 子集，可按 `eo:cloud_cover` 等属性过滤；不支持的操作符会拒绝。
-- 解析 GET/POST `next` 链接，包括相对 URL、后续请求的 body、headers 和 `merge` 标志；限制最大页数并检测循环。默认阻止跨源分页，需显式允许。
+项目的具体贡献是 MoonBit 实现的 Item / ItemCollection 解析、常用搜索参数与 CQL2 JSON 子集检查，以及可跨请求方法的分页解释。CLI 把这些能力串成一条实际工作流，并输出可按 role 筛选的资产清单。相对资产地址先以 Item 的 `self` 链接为基准，缺失时以响应页地址为基准；同时保留原始 `href`，便于排查服务数据。默认阻止跨源分页、限制最大页数并检测重复请求，避免错误 `next` 链接导致无界抓取。
 
-### 3.3 Item 读取与资产清单
+MoonPMTiles 处理 PMTiles 归档内的瓦片定位，MoonSTAC 处理 STAC 目录服务的场景发现和资产提取，两者的输入、标准与核心任务不同。已有成熟的其他语言 STAC 客户端；STAC 规范、API、分页和 CQL2 均非本项目首创。2026-11-10 对 MoonBit 生态索引和公开页面进行的初步复查未发现直接等价的 MoonBit STAC API 客户端；该检索无法覆盖未公开申报，不能保证赛事内部查重通过。[选题记录][research]列出检索边界。
 
-- 解析 ItemCollection 与 STAC Item 1.0.0/1.1.0 的核心字段：ID、Collection、时间、Geometry、BBox、Properties、Assets 和 Item 的 `self` 链接。
-- 检查必需字段、GeoJSON 坐标层级与多边形闭合、RFC 3339 时间、资产地址与角色等关键结构；输出保留完整 `properties` 和 `geometry`。
-- 提取资产 key、原始地址、标题、媒体类型和角色。`search` 附加解析后的绝对地址；`assets` 命令按 key 或 role 筛选，并输出含场景来源的资产清单。
-- 相对资产地址以 Item `self` 链接为基准；缺少 `self` 时以响应页 URL 为基准。工具只给出 URL，不访问或下载资产。
+## 四、完整使用场景
 
-## 4. 技术结构与实现取舍
+1. **公开目录发现与集合选择。** 对 Element 84 Earth Search 的 STAC API 根地址执行 `discover`，读取搜索和集合入口；`collections` 遍历集合列表。2026-11-10 本地运行观察到根目录 ID `earth-search-aws`、14 条 `conformsTo` 和 9 个集合。这些是当时的服务响应，不固定为规范要求。
+2. **按空间和属性筛选场景。** 在 `sentinel-2-l2a` 集合中，用 `bbox=120,30,121,31` 做 GET/POST 搜索，按 `eo:cloud_cover <= 20` 的 CQL2 JSON 过滤，或把合成 Polygon 文件作为 `intersects` POST 请求。真实服务的 GeoJSON 查询返回 `S2A_50RQU_20261110_0_L2A`；GET/POST 两页搜索与 CQL2 过滤也已运行。服务目录会更新，实际场景 ID 不作为永久承诺。
+3. **从场景提取影像资产。** 对同一查询结果执行 `assets --role data`，按 key、媒体类型与 role 查看候选资产 URL。真实查询中得到 32 个 `data` 角色资产，第一个示例资产 key 为 `aot`，地址是 HTTPS。输出是可供后续程序使用的资产清单；MoonSTAC 不验证远端资产是否公开可下载，也不把资产内容纳入仓库。
+4. **处理异常服务响应。** 合成测试覆盖缺失 Item 字段、错误 GeoJSON、多边形未闭合、非法时间、`bbox` 与 `intersects` 冲突、分页循环和跨源跳转。错误会明确返回，不能把“只解析出部分结果”当作成功。
 
-```text
-STAC API 公开服务
-   │ HTTP 响应
-   ▼
-Node.js CLI ── 请求、文件输入、URL 解析、分页调度、结果输出
-   │ JSON 字符串
-   ▼
-MoonBit 核心 ── STAC 结构解析、GeoJSON/时间检查、查询构造、next 解释
-   │
-   └── JS / Wasm-GC / Native 三目标测试
-```
+前三个场景的命令见[运行说明][readme]，观察与测试边界见[验证记录][validation]。网络演示依赖公开服务可用性；自动化测试使用仓库夹具和模拟传输，不依赖该公网服务。
 
-MoonBit 负责可复用的标准相关逻辑，避免把业务规则留在 CLI。Node.js 仅负责运行环境相关的 I/O 与 URL 处理。项目提供 MoonBit 公共解析 API，以及供 CLI 使用的 JS 桥接模块。当前桥接采用 JSON 字符串边界，便于跨目标测试，但并非零拷贝接口；这是 MVP 在实现复杂度和可移植性之间的取舍。
+## 五、范围、当前结果与 11 月交付安排
 
-分页请求不能只取下一页 URL：STAC API 的 `next` 可能要求 POST，且附带新的 body 或 headers。因此 CLI 记录上一请求体和请求头，按 `merge` 语义产生下一请求，并以方法、URL、请求体和请求头组合检测循环。资产地址解析不改变原始 `href`，便于调用者对照服务返回值。
+**当前 MVP 范围：** 解析 STAC Item 1.0.0/1.1.0 的核心字段和 ItemCollection；读取 landing page 与 Collections；构造 `bbox`、GeoJSON `intersects`、时间、集合、Item ID、limit 和一组 CQL2 JSON 属性过滤条件；跟随 GET/POST `next`，处理相对链接、body、headers 与 `merge`；提取资产标题、媒体类型、role、原始及解析后地址。CLI 提供 `discover`、`collections`、`validate`、`search`、`assets` 五个命令。
 
-## 5. 可复现演示
+| 阶段 | 当前实际结果 | 11 月后续工作或复核 |
+| --- | --- | --- |
+| S0 方向与公开复查 | 记录 STAC 规范、相邻 MoonBit 项目与公开检索边界 | 由赛事方核对无法公开查询的申报重复风险 |
+| S1 MoonBit 核心 | Item、ItemCollection、目录和集合解析；查询构造与核心结构检查；三目标编译测试 | 扩展错误定位与更多真实响应边界 |
+| S2 运行适配 | Node.js CLI 支持 HTTP、文件输入、GET/POST 分页、同源保护和资产清单 | 增加认证与速率限制场景前先取得可公开复现样本 |
+| S3 独立验证 | 三目标各 14/14、Node.js 集成测试 11/11；Earth Search 的真实查询已运行；[最新 GitHub CI][ci] 成功 | 增加第二个独立 STAC 服务和更多复杂 GeoJSON/分页样本 |
+| S4 开源交付 | Apache-2.0、README、夹具、验证记录、Markdown 申报书和公开提交已具备 | 申报人核对个人信息与赛事规则并自行填写官方表单 |
 
-环境：MoonBit 工具链、Node.js 20+。在仓库根目录运行：
+**范围边界：** 当前只对使用路径所需的关键 STAC 结构做检查，未逐项实施完整 Item JSON Schema；不检查 GeoJSON 自交或环方向，不支持完整 CQL2、排序、字段选择及全部 STAC 扩展。资产输出不等于下载权限验证。Mooncakes 0.1.0 尚未包含本次 MVP 新增功能，使用最新功能应从 GitHub 当前源码构建。后续扩展以真实需求和可复现测试驱动，不靠无功能的代码或提交数量堆砌工程规模。
+
+## 六、项目性质与原创说明
+
+MoonSTAC 是依据公开 STAC 规范独立编写的 MoonBit 生态实现，不是把现有 Python/JavaScript 客户端封装为 MoonBit 接口。可复用核心由 MoonBit 编写，Node.js 负责 I/O 和命令行环境。开发、测试和文档使用 AI 辅助，申报人应自行检查源码、实测命令与最终材料。
+
+项目不主张 STAC、GeoJSON、CQL2、URL 解析或分页技术的原创发明，也不声称获得 OGC 认证、外部用户采用、性能领先或赛事查重通过。公开服务验证只证明记录的命令在当时响应上运行成功，不能外推为对所有 STAC 服务的完整兼容。
+
+## 七、参考来源及许可证
+
+实现依据 [OGC STAC API 1.0][ogc]、[STAC Item 1.0.0 JSON Schema][item10]、[STAC Item 1.1.0 JSON Schema][item11]和 [STAC API Filter 扩展][filter]。项目自有代码采用 [Apache-2.0][license]。Earth Search 仅作为在线查询对象；仓库保存合成夹具和查询观察，不分发其遥感影像。项目没有运行时 npm 依赖；MoonBit 与 Node.js 工具链属于构建和执行环境。
+
+公开规范和测试服务是技术依据，不是项目的原创成果。若后续加入第三方测试数据或代码，应另记来源、许可和版本，再扩大分发范围。
+
+## 八、仓库、测试与交付
+
+[GitHub 仓库][repo]保留源码和[提交历史][commits]；本轮 MVP 功能提交为 [`45f89e0`][feature-commit]，申报材料提交为 [`785fcf9`][docs-commit]。[最新 CI][ci] 对 `785fcf9` 的结果为 `success`。可运行命令如下：
 
 ```sh
 moon test --target js
 moon test --target wasm-gc
 moon test --target native
 npm test
-node cli.mjs discover --url https://earth-search.aws.element84.com/v1/
-node cli.mjs collections --url https://earth-search.aws.element84.com/v1/collections
 node cli.mjs search --url https://earth-search.aws.element84.com/v1/search --intersects-file test-fixtures/search-area.geojson --collection sentinel-2-l2a --method POST --limit 1 --max-pages 1
-node cli.mjs assets --url https://earth-search.aws.element84.com/v1/search --bbox 120,30,121,31 --collection sentinel-2-l2a --limit 1 --max-pages 1 --role data
+node cli.mjs assets --url https://earth-search.aws.element84.com/v1/search --intersects-file test-fixtures/search-area.geojson --collection sentinel-2-l2a --method POST --limit 1 --max-pages 1 --role data
 ```
 
-已在本机运行的验证：三目标 MoonBit 测试各 **14/14** 通过；Node.js 集成测试 **11/11** 通过；公开 Earth Search 服务上，GeoJSON POST 查询返回场景 `S2A_50RQU_20261110_0_L2A`，该页用 `--role data` 可得到 32 个资产记录。此前版本还在该服务验证过 GET/POST 两页搜索与 CQL2 云量过滤。以上公网结果会随服务与目录数据变化，不作为固定测试断言。完整命令和记录见 [验证文档](VALIDATION.zh-CN.md)。
+本地三目标 MoonBit 测试各 **14/14**，Node.js 集成测试 **11/11**；线上 CI 同一提交成功。完整路径、服务观察和已知缺口见[验证记录][validation]。这些测试支持 MVP 所列功能，不等于完整 STAC 合规或赛事验收。当前公开源码与 Mooncakes 0.1.0 的版本范围不同；本稿为 Markdown 待提交材料，**官方报名表尚未填写**，最终资格及赛期提交认定由主办方决定。
 
-## 6. MVP 验收标准与现状
-
-| 验收点 | 当前证据 |
-| --- | --- |
-| 能根据空间范围、集合查到真实 Item | Earth Search 的 bbox GET 和 GeoJSON POST 已运行 |
-| 能处理多页和 POST next | 合成集成测试覆盖 GET、POST、body、headers、merge 与循环；真实服务已跑通两页 |
-| 能从 Item 得到可用资产地址 | `assets` 清单含绝对 URL、媒体类型和角色；真实服务返回 32 个 data 资产 |
-| 可作为 MoonBit 库复用 | Mooncakes 0.1.0 可在独立项目安装与调用；新增功能暂在 GitHub 源码 |
-| 在多个 MoonBit 目标下编译测试 | JS、Wasm-GC、Native 各 14 项通过 |
-| 公开、可检查的提交 | GitHub 仓库包含源码、测试、夹具、文档、CI 与 Apache-2.0 许可 |
-
-## 7. 独立性与选题风险
-
-项目依据 OGC STAC API、STAC Item Schema 和公开扩展规范独立实现，没有照搬现有客户端。MoonPMTiles 处理 PMTiles 归档格式，MoonSTAC 处理 STAC 目录搜索；两者标准、输入输出与使用场景不同。已有其他语言的 STAC 客户端，本项目不主张 STAC 搜索或分页技术为全球首创。
-
-截至 2026-11-10，对 MoonBit 生态索引和公开页面的检索未发现直接等价的 MoonBit STAC API 客户端。这只是公开信息范围内的初步查重，无法证明没有未公开申报，也不能保证赛事内部查重通过。证据与检索边界见[选题记录](RESEARCH.zh-CN.md)。
-
-## 8. 明确的边界与下一阶段
-
-当前校验针对 MVP 使用的关键结构，**不是完整 STAC Item JSON Schema 验证器，也没有 OGC 认证**。尚未覆盖 GeoJSON 自交、全部扩展 Schema、完整 CQL2、排序、字段选择和更多服务的认证/限流机制。公网服务的资产地址可能需要额外权限，清单工具不保证地址可下载。
-
-下一阶段按价值排序：一是扩展真实服务兼容性测试并改进错误定位；二是增加常用查询扩展和更丰富的结构校验；三是完善库级 API 文档与版本发布。若参赛评审要求更广的工程规模，应以这些真实能力和测试扩充代码，不以无功能的行数填充仓库。
-
-## 9. 参考依据
-
-- [OGC STAC API 1.0 社区标准](https://docs.ogc.org/cs/25-005/25-005.html)
-- [STAC Item 1.0.0 JSON Schema](https://schemas.stacspec.org/v1.0.0/item-spec/json-schema/item.json)
-- [STAC Item 1.1.0 JSON Schema](https://schemas.stacspec.org/v1.1.0/item-spec/json-schema/item.json)
-- [STAC API Filter 扩展](https://github.com/stac-api-extensions/filter)
-- [MoonBit 生态索引](https://moonbit-ecosystem-index.pages.dev/#/)
+[repo]: https://github.com/wangjiale6036-dotcom/moonstac
+[commits]: https://github.com/wangjiale6036-dotcom/moonstac/commits/main/
+[package]: https://mooncakes.io/docs/wangjiale6036-dotcom/moonstac@0.1.0
+[readme]: https://github.com/wangjiale6036-dotcom/moonstac/blob/main/README.md
+[validation]: https://github.com/wangjiale6036-dotcom/moonstac/blob/main/docs/VALIDATION.zh-CN.md
+[research]: https://github.com/wangjiale6036-dotcom/moonstac/blob/main/docs/RESEARCH.zh-CN.md
+[license]: https://github.com/wangjiale6036-dotcom/moonstac/blob/main/LICENSE
+[ci]: https://github.com/wangjiale6036-dotcom/moonstac/actions/runs/42813989349
+[feature-commit]: https://github.com/wangjiale6036-dotcom/moonstac/commit/45f89e0
+[docs-commit]: https://github.com/wangjiale6036-dotcom/moonstac/commit/785fcf9
+[ogc]: https://docs.ogc.org/cs/25-005/25-005.html
+[item10]: https://schemas.stacspec.org/v1.0.0/item-spec/json-schema/item.json
+[item11]: https://schemas.stacspec.org/v1.1.0/item-spec/json-schema/item.json
+[filter]: https://github.com/stac-api-extensions/filter
