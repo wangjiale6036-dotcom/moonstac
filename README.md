@@ -4,6 +4,8 @@ MoonBit 编写的 STAC Item Search 核心与 Node.js 命令行工具。输入空
 
 **状态：公开开发预览。** 源码已发布在 [GitHub](https://github.com/wangjiale6036-dotcom/moonstac)，MoonBit 库已发布为 [Mooncakes 0.1.0](https://mooncakes.io/docs/wangjiale6036-dotcom/moonstac@0.1.0)。当前实现支持 STAC Item 1.0.0/1.1.0 的一部分核心结构检查，不是完整 JSON Schema 验证器，也未获得 OGC 认证。已在 Earth Search 公网 API 验证入口发现、集合浏览、GET、POST 和两页查询，详见[验证记录](docs/VALIDATION.zh-CN.md)。
 
+参赛说明与 MVP 验收证据见[项目申报书（详细版）](docs/PROJECT_PROPOSAL.zh-CN.md)和[一页版 PDF](docs/MoonSTAC-项目申报书-一页版.pdf)。Mooncakes 0.1.0 是早期预览版；仓库中新增的 GeoJSON 查询和资产清单功能尚未发布到该版本。
+
 ## 快速开始
 
 需要 MoonBit 工具链与 Node.js 20 或更新版本。
