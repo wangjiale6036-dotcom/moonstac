@@ -2,7 +2,7 @@
 
 MoonBit 编写的 STAC Item Search 核心与 Node.js 命令行工具。输入空间范围、时间和集合，向 STAC API `/search` 发送 GET 或 POST 请求，逐页读取 ItemCollection，提取 Item ID、集合、时间和资产链接。JSON 解析、结构检查、查询体构造及 `next` 链接解释由 MoonBit 完成；Node.js 负责 HTTP 和文件 I/O。
 
-**状态：本地开发预览。** 当前实现支持 STAC Item 1.0.0/1.1.0 的一部分核心结构检查，不是完整 JSON Schema 验证器，也未获得 OGC 认证。已在 Earth Search 公网 API 验证入口发现、集合浏览、GET、POST 和两页查询，详见[验证记录](docs/VALIDATION.zh-CN.md)。
+**状态：公开开发预览。** 源码已发布在 [GitHub](https://github.com/wangjiale6036-dotcom/moonstac)。当前实现支持 STAC Item 1.0.0/1.1.0 的一部分核心结构检查，不是完整 JSON Schema 验证器，也未获得 OGC 认证。已在 Earth Search 公网 API 验证入口发现、集合浏览、GET、POST 和两页查询，详见[验证记录](docs/VALIDATION.zh-CN.md)。
 
 ## 快速开始
 
