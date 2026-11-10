@@ -1,0 +1,55 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "wangjiale6036-dotcom/moonstac"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn page_summary(String) -> String
+
+pub fn parse_item(String) -> Item raise StacError
+
+pub fn parse_item_json(Json) -> Item raise StacError
+
+pub fn parse_page(String) -> ItemPage raise StacError
+
+pub fn search_body(Array[Double], String?, Array[String], Int) -> String raise StacError
+
+pub fn search_request(String) -> String
+
+// Errors
+pub(all) suberror StacError {
+  Invalid(String)
+} derive(@debug.Debug)
+
+// Types and methods
+pub(all) struct Asset {
+  key : String
+  href : String
+} derive(Eq, @debug.Debug)
+
+pub(all) struct Item {
+  id : String
+  collection : String?
+  datetime : String?
+  assets : Array[Asset]
+} derive(Eq, @debug.Debug)
+
+pub(all) struct ItemPage {
+  items : Array[Item]
+  next : NextLink?
+} derive(Eq, @debug.Debug)
+
+pub(all) struct NextLink {
+  href : String
+  http_method : String
+  body : Json?
+  headers : Json?
+  merge : Bool
+} derive(Eq, @debug.Debug)
+
+// Type aliases
+
+// Traits
+

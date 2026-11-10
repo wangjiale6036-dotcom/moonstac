@@ -1,0 +1,15 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "stac_version": "1.0.0",
+      "type": "Feature",
+      "id": "example-scene",
+      "geometry": null,
+      "properties": {"datetime": "2026-11-01T00:00:00Z"},
+      "links": [],
+      "assets": {"visual": {"href": "https://example.com/example-scene.tif"}}
+    }
+  ],
+  "links": []
+}

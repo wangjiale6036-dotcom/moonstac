@@ -1,0 +1,9 @@
+import {
+  "wangjiale6036-dotcom/moonstac" @stac,
+}
+
+options(
+  link: {
+    "js": { "exports": [ "search_request", "page_summary" ], "format": "esm" },
+  },
+)

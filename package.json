@@ -1,0 +1,10 @@
+{
+  "name": "moonstac-cli",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "moon build --target js --release bridge",
+    "test": "npm run build && node --test test/*.test.mjs"
+  },
+  "engines": { "node": ">=20" }
+}
