@@ -15,6 +15,7 @@ MoonBit 编写的 STAC Item Search 核心与 Node.js 命令行工具。输入空
 ```sh
 moon test
 npm test
+npm run verify:live
 node cli.mjs validate test-fixtures/one-page.json
 node cli.mjs discover --url https://earth-search.aws.element84.com/v1/
 node cli.mjs collections --url https://earth-search.aws.element84.com/v1/collections
@@ -25,13 +26,13 @@ node cli.mjs search --url https://earth-search.aws.element84.com/v1/search --int
 node cli.mjs assets --url https://earth-search.aws.element84.com/v1/search --bbox 120,30,121,31 --collection sentinel-2-l2a --limit 1 --role data
 ```
 
-`npm test` 会先编译 MoonBit JS 桥接模块。首次单独运行 CLI 之前先执行 `npm run build`。上面的在线查询已实际执行过。`search` 输出 JSON，其中 `items` 为扁平列表，`pages` 为实际读取页数，`hasMore` 表示达到页数上限时仍有下一页。
+`npm test` 会先编译 MoonBit JS 桥接模块。`npm run verify:live` 也会先编译，再访问 Earth Search 和 Planetary Computer，机器检查入口发现、集合、GET/POST 分页、GeoJSON、资产清单与云量过滤；网络服务或目录变化可能使这个可选验收脚本失败。首次单独运行 CLI 之前先执行 `npm run build`。上面的在线查询已实际执行过。`search` 输出 JSON，其中 `items` 为扁平列表，`pages` 为实际读取页数，`hasMore` 表示达到页数上限时仍有下一页。
 
 `search` 可用参数：`--url`、`--bbox west,south,east,north`、`--intersects-file geometry.json`、`--datetime`、可重复的 `--collection`、可重复的 `--id`、`--filter-file`、`--limit`、`--method GET|POST`、`--max-pages`。`--bbox` 可省略，例如仅按 Item ID 查询；与 `--intersects-file` 互斥。`--intersects-file` 接收 GeoJSON **Geometry**（不是 Feature），需搭配 `--method POST`。`--filter-file` 读取 CQL2 JSON 表达式，也需搭配 POST。默认 GET、每页 10 条、最多 5 页。`--url` 指向具体的 `/search` 端点。`collections` 使用 `--url` 和可选 `--max-pages`。分页默认只允许同源 URL；如确需访问跨源 `next` 链接，可显式指定 `--allow-cross-origin true`。命令不会下载资产文件。
 
 `assets` 命令接受相同搜索参数，并额外支持可重复的 `--asset <key>` 和 `--role <role>`；输出匹配的 Item ID、集合、时间、资产 key、标题、媒体类型、角色和绝对 URL。相对资产地址先以 Item 的 `self` 链接为基准；缺少 `self` 时以返回该 Item 的搜索页地址为基准。输出仅是清单，不下载数据。`search` 同时保留资产的原始 `href`，并给出 `resolvedHref`。
 
-执行 CQL2 过滤时，最好先确认服务声明并实际支持 STAC Filter 扩展。Earth Search v1 没有声明该扩展，而且可能忽略传入的 `filter`。CLI 仍会按受支持的 CQL2 子集在本地复核返回的每个 Item，排除已知不匹配或属性缺失的结果。若服务忽略过滤，读取到 `--max-pages` 上限时可能只得到少量或零个匹配项；`hasMore=true` 表示后面仍有未检查的页。本地复核不能减少服务返回的数据量，也不等于服务端实现了 Filter。
+执行 CQL2 过滤时，最好先确认服务声明并实际支持 STAC Filter 扩展。Earth Search v1 没有声明该扩展，而且可能忽略传入的 `filter`。MoonBit 核心会按受支持的 CQL2 子集逐项复核返回的 Item，排除已知不匹配或属性缺失的结果。若服务忽略过滤，读取到 `--max-pages` 上限时可能只得到少量或零个匹配项；`hasMore=true` 表示后面仍有未检查的页。本地复核不能减少服务返回的数据量，也不等于服务端实现了 Filter。
 
 ## 支持范围
 
@@ -41,7 +42,7 @@ node cli.mjs assets --url https://earth-search.aws.element84.com/v1/search --bbo
 - 支持一组明确的 CQL2 JSON 操作符（比较、`between`、`and`、`or`、`not`），可按 `eo:cloud_cover` 等 Item 属性过滤；不支持的操作符会明确报错。
 - 处理 GET/POST `next` 链接、相对地址、`body`、`headers` 和 `merge`；限制页数并检测重复请求。
 - 从资产中提取标题、媒体类型、角色及 Item `self` 链接，生成可筛选的资产清单。
-- MoonBit 公共 API：`parse_item`、`parse_page`、`parse_landing`、`parse_collections`、`search_body`；JS 桥接 API：`search_request`、`page_summary`、`landing_summary`、`collections_summary`。
+- MoonBit 公共 API：`parse_item`、`parse_page`、`parse_landing`、`parse_collections`、`search_body`、`filter_items`；JS 桥接 API：`search_request`、`page_summary`、`landing_summary`、`collections_summary`、`filter_items`。
 
 当前不检查 GeoJSON 自交与环方向、扩展 Schema、所有 STAC Item 字段语义，也不支持完整 CQL2、排序或字段选择。`validate` 输出的资产链接仍是原始值；`search` 和 `assets` 增加绝对地址解析。API 认证及速率限制由调用环境处理。不要把 `validate` 的通过结果视为完整 STAC 合规证明。
 

@@ -12,6 +12,6 @@
 - [Mooncakes 0.1.0](https://mooncakes.io/docs/wangjiale6036-dotcom/moonstac@0.1.0) 已发布；远端 `resource.json` 中包名、版本、仓库和许可证与源码一致。独立临时项目执行 `moon add wangjiale6036-dotcom/moonstac@0.1.0`、`moon check`、`moon run cmd/main --target js` 均成功，输出包含 `"status":"ok"` 的查询体。
 - 测试夹具为合成 STAC ItemCollection，没有使用真实遥感数据。
 
-2026-11-15 复验：本地三目标各 14/14，原有 Node.js 11/11，新增本地过滤复核测试后为 13/13；`validate` 样例成功。Earth Search 根目录仍有 14 条 `conformsTo`、集合接口返回 9 个集合；GET 与 POST 两页搜索各得到两个 Item；GeoJSON `intersects` 查询返回一个 Item，CLI `assets --role data` 输出 32 个资产。Microsoft Planetary Computer 的根目录声明 CQL2 JSON 与 Item Search Filter；对它执行 `eo:cloud_cover <= 20` 的 CLI POST 查询，返回三个场景，云量分别为 0.197159、9.893282、4.810465，均满足阈值。新增本地复核未改变该结果。验证只覆盖所列查询，不等于完整过滤表达式兼容。
+2026-11-15 复验：`filter_items` 的逐项 CQL2 复核已迁入 MoonBit 核心；本地 JS、Wasm-GC、Native 各 20/20，Node.js 13/13，`validate` 样例成功。`npm run verify:live` 访问两个公开服务并对关键路径做机器断言：Earth Search 返回 9 个集合，GET 与 POST 各读取两页，GeoJSON `intersects` 返回一个 Item，资产清单含 32 个 `data` 资产；读取五页后由 MoonBit 本地筛出四个云量 `<= 20` 的 Item，`hasMore=true`。Microsoft Planetary Computer 的根目录声明 CQL2 JSON 与 Item Search Filter；对它执行相同过滤条件得到三个 Item，云量均不超过 20。验证只覆盖所列查询，不等于完整过滤表达式兼容。
 
 尚未验证：macOS/Windows 线上 CI、完整 Schema 一致性、认证服务以及多个服务的复杂 GeoJSON/分页组合。
