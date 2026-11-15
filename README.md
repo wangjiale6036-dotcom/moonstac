@@ -19,7 +19,7 @@ node cli.mjs validate test-fixtures/one-page.json
 node cli.mjs discover --url https://earth-search.aws.element84.com/v1/
 node cli.mjs collections --url https://earth-search.aws.element84.com/v1/collections
 node cli.mjs search --url https://earth-search.aws.element84.com/v1/search --bbox 120,30,121,31 --collection sentinel-2-l2a --limit 2 --max-pages 2
-node cli.mjs search --url https://earth-search.aws.element84.com/v1/search --bbox 120,30,121,31 --collection sentinel-2-l2a --method POST --filter-file test-fixtures/cloud-cover-filter.json --limit 1
+node cli.mjs search --url https://planetarycomputer.microsoft.com/api/stac/v1/search --bbox 120,30,121,31 --collection sentinel-2-l2a --method POST --filter-file test-fixtures/cloud-cover-filter.json --limit 3 --max-pages 1
 node cli.mjs search --url https://earth-search.aws.element84.com/v1/search --intersects-file test-fixtures/search-area.geojson --collection sentinel-2-l2a --method POST --limit 1
 node cli.mjs assets --url https://earth-search.aws.element84.com/v1/search --bbox 120,30,121,31 --collection sentinel-2-l2a --limit 1 --role data
 ```
@@ -29,6 +29,8 @@ node cli.mjs assets --url https://earth-search.aws.element84.com/v1/search --bbo
 `search` 可用参数：`--url`、`--bbox west,south,east,north`、`--intersects-file geometry.json`、`--datetime`、可重复的 `--collection`、可重复的 `--id`、`--filter-file`、`--limit`、`--method GET|POST`、`--max-pages`。`--bbox` 可省略，例如仅按 Item ID 查询；与 `--intersects-file` 互斥。`--intersects-file` 接收 GeoJSON **Geometry**（不是 Feature），需搭配 `--method POST`。`--filter-file` 读取 CQL2 JSON 表达式，也需搭配 POST。默认 GET、每页 10 条、最多 5 页。`--url` 指向具体的 `/search` 端点。`collections` 使用 `--url` 和可选 `--max-pages`。分页默认只允许同源 URL；如确需访问跨源 `next` 链接，可显式指定 `--allow-cross-origin true`。命令不会下载资产文件。
 
 `assets` 命令接受相同搜索参数，并额外支持可重复的 `--asset <key>` 和 `--role <role>`；输出匹配的 Item ID、集合、时间、资产 key、标题、媒体类型、角色和绝对 URL。相对资产地址先以 Item 的 `self` 链接为基准；缺少 `self` 时以返回该 Item 的搜索页地址为基准。输出仅是清单，不下载数据。`search` 同时保留资产的原始 `href`，并给出 `resolvedHref`。
+
+执行 CQL2 过滤时，先确认服务声明并实际支持 STAC Filter 扩展。Earth Search v1 的根目录没有声明该扩展；2026-11-15 实测它接受 `filter` 请求却返回不满足云量阈值的场景，因此上面的过滤示例使用支持 Filter 的 Microsoft Planetary Computer。CLI 负责构造和发送过滤条件，不会把服务忽略的条件自动改为本地过滤。
 
 ## 支持范围
 

@@ -29,7 +29,7 @@ MoonPMTiles 处理 PMTiles 归档内的瓦片定位，MoonSTAC 处理 STAC 目�
 ## 四、完整使用场景
 
 1. **公开目录发现与集合选择。** 对 Element 84 Earth Search 的 STAC API 根地址执行 `discover`，读取搜索和集合入口；`collections` 遍历集合列表。2026-11-10 本地运行观察到根目录 ID `earth-search-aws`、14 条 `conformsTo` 和 9 个集合。这些是当时的服务响应，不固定为规范要求。
-2. **按空间和属性筛选场景。** 在 `sentinel-2-l2a` 集合中，用 `bbox=120,30,121,31` 做 GET/POST 搜索，按 `eo:cloud_cover <= 20` 的 CQL2 JSON 过滤，或把合成 Polygon 文件作为 `intersects` POST 请求。真实服务的 GeoJSON 查询返回 `S2A_50RQU_20261110_0_L2A`；GET/POST 两页搜索与 CQL2 过滤也已运行。服务目录会更新，实际场景 ID 不作为永久承诺。
+2. **按空间和属性筛选场景。** 在 Earth Search 的 `sentinel-2-l2a` 集合中，用 `bbox=120,30,121,31` 做 GET/POST 两页搜索，或把合成 Polygon 文件作为 `intersects` POST 请求。在支持 STAC Filter 扩展的 Microsoft Planetary Computer 上，使用相同 bbox 与集合、按 `eo:cloud_cover <= 20` 发送 CQL2 JSON POST 查询；2026-11-15 返回的三个场景云量分别为 0.197159、9.893282、4.810465。Earth Search 没有声明 Filter 扩展；它虽接受该请求，却返回了云量 99.883515 的场景，不能用于证明过滤有效。服务目录会更新，实际场景与数值不作为永久承诺。
 3. **从场景提取影像资产。** 对同一查询结果执行 `assets --role data`，按 key、媒体类型与 role 查看候选资产 URL。真实查询中得到 32 个 `data` 角色资产，第一个示例资产 key 为 `aot`，地址是 HTTPS。输出是可供后续程序使用的资产清单；MoonSTAC 不验证远端资产是否公开可下载，也不把资产内容纳入仓库。
 4. **处理异常服务响应。** 合成测试覆盖缺失 Item 字段、错误 GeoJSON、多边形未闭合、非法时间、`bbox` 与 `intersects` 冲突、分页循环和跨源跳转。错误会明确返回，不能把“只解析出部分结果”当作成功。
 
@@ -44,8 +44,8 @@ MoonPMTiles 处理 PMTiles 归档内的瓦片定位，MoonSTAC 处理 STAC 目�
 | S0 方向与公开复查 | 记录 STAC 规范、相邻 MoonBit 项目与公开检索边界 | 由赛事方核对无法公开查询的申报重复风险 |
 | S1 MoonBit 核心 | Item、ItemCollection、目录和集合解析；查询构造与核心结构检查；三目标编译测试 | 扩展错误定位与更多真实响应边界 |
 | S2 运行适配 | Node.js CLI 支持 HTTP、文件输入、GET/POST 分页、同源保护和资产清单 | 增加认证与速率限制场景前先取得可公开复现样本 |
-| S3 独立验证 | 三目标各 14/14、Node.js 集成测试 11/11；Earth Search 的真实查询已运行；[最新 GitHub CI][ci] 成功 | 增加第二个独立 STAC 服务和更多复杂 GeoJSON/分页样本 |
-| S4 开源交付 | Apache-2.0、README、夹具、验证记录、Markdown 申报书和公开提交已具备 | 申报人核对个人信息与赛事规则并自行填写官方表单 |
+| S3 独立验证 | 三目标各 14/14、Node.js 集成测试 11/11；Earth Search 搜索与资产清单、Planetary Computer CQL2 过滤已运行；[已核验 GitHub CI][ci] 成功 | 扩大第二服务的兼容性覆盖，增加复杂 GeoJSON/分页样本 |
+| S4 开源交付 | Apache-2.0、README、夹具、验证记录、Markdown 申报书和公开提交已具备 | 继续围绕真实功能留下可追踪的开发记录；申报人核对信息并自行填写官方表单 |
 
 **范围边界：** 当前只对使用路径所需的关键 STAC 结构做检查，未逐项实施完整 Item JSON Schema；不检查 GeoJSON 自交或环方向，不支持完整 CQL2、排序、字段选择及全部 STAC 扩展。资产输出不等于下载权限验证。Mooncakes 0.1.0 尚未包含本次 MVP 新增功能，使用最新功能应从 GitHub 当前源码构建。后续扩展以真实需求和可复现测试驱动，不靠无功能的代码或提交数量堆砌工程规模。
 
@@ -63,7 +63,7 @@ MoonSTAC 是依据公开 STAC 规范独立编写的 MoonBit 生态实现，不�
 
 ## 八、仓库、测试与交付
 
-[GitHub 仓库][repo]保留源码和[提交历史][commits]；本轮 MVP 功能提交为 [`45f89e0`][feature-commit]，申报材料提交为 [`785fcf9`][docs-commit]。[最新 CI][ci] 对 `785fcf9` 的结果为 `success`。可运行命令如下：
+[GitHub 仓库][repo]保留源码和[提交历史][commits]；本轮 MVP 功能提交为 [`45f89e0`][feature-commit]，申报材料提交为 [`785fcf9`][docs-commit]。[已核验 CI][ci] 对 `c050a11` 的结果为 `success`。可运行命令如下：
 
 ```sh
 moon test --target js
@@ -72,6 +72,7 @@ moon test --target native
 npm test
 node cli.mjs search --url https://earth-search.aws.element84.com/v1/search --intersects-file test-fixtures/search-area.geojson --collection sentinel-2-l2a --method POST --limit 1 --max-pages 1
 node cli.mjs assets --url https://earth-search.aws.element84.com/v1/search --intersects-file test-fixtures/search-area.geojson --collection sentinel-2-l2a --method POST --limit 1 --max-pages 1 --role data
+node cli.mjs search --url https://planetarycomputer.microsoft.com/api/stac/v1/search --bbox 120,30,121,31 --collection sentinel-2-l2a --method POST --filter-file test-fixtures/cloud-cover-filter.json --limit 3 --max-pages 1
 ```
 
 本地三目标 MoonBit 测试各 **14/14**，Node.js 集成测试 **11/11**；线上 CI 同一提交成功。完整路径、服务观察和已知缺口见[验证记录][validation]。这些测试支持 MVP 所列功能，不等于完整 STAC 合规或赛事验收。当前公开源码与 Mooncakes 0.1.0 的版本范围不同；本稿为 Markdown 待提交材料，**官方报名表尚未填写**，最终资格及赛期提交认定由主办方决定。
@@ -83,7 +84,7 @@ node cli.mjs assets --url https://earth-search.aws.element84.com/v1/search --int
 [validation]: https://github.com/wangjiale6036-dotcom/moonstac/blob/main/docs/VALIDATION.zh-CN.md
 [research]: https://github.com/wangjiale6036-dotcom/moonstac/blob/main/docs/RESEARCH.zh-CN.md
 [license]: https://github.com/wangjiale6036-dotcom/moonstac/blob/main/LICENSE
-[ci]: https://github.com/wangjiale6036-dotcom/moonstac/actions/runs/42813989349
+[ci]: https://github.com/wangjiale6036-dotcom/moonstac/actions/runs/42814903211
 [feature-commit]: https://github.com/wangjiale6036-dotcom/moonstac/commit/45f89e0
 [docs-commit]: https://github.com/wangjiale6036-dotcom/moonstac/commit/785fcf9
 [ogc]: https://docs.ogc.org/cs/25-005/25-005.html
