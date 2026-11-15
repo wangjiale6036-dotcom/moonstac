@@ -1,6 +1,6 @@
 # MoonSTAC 项目申报书
 
-**状态：2026 年 11 月黑客松待提交稿。** 本文按此前 MoonSHACL、MoonPMTiles 申报书的八节结构编写。GitHub 已有可运行 MVP、测试与持续集成；赛事表单由申报人本人填写，目前尚未提交。Mooncakes 0.1.0 是早期预览版，新增的 GeoJSON 区域查询和资产清单只在 GitHub 当前源码中。
+本文按此前 MoonSHACL、MoonPMTiles 申报书的八节结构编写。GitHub 已有可运行 MVP、测试与持续集成。Mooncakes 0.1.0 是早期预览版，新增的 GeoJSON 区域查询和资产清单只在 GitHub 当前源码中。
 
 ## 一、项目名称与申报人
 
@@ -74,7 +74,7 @@ node cli.mjs search --url https://earth-search.aws.element84.com/v1/search --int
 node cli.mjs assets --url https://earth-search.aws.element84.com/v1/search --intersects-file test-fixtures/search-area.geojson --collection sentinel-2-l2a --method POST --limit 1 --max-pages 1 --role data
 ```
 
-本地三目标 MoonBit 测试各 **14/14**，Node.js 集成测试 **11/11**；线上 CI 同一提交成功。完整路径、服务观察和已知缺口见[验证记录][validation]。这些测试支持 MVP 所列功能，不等于完整 STAC 合规或赛事验收。当前公开源码与 Mooncakes 0.1.0 的版本范围不同；本稿为 Markdown 待提交材料，**官方报名表尚未填写**，最终资格及赛期提交认定由主办方决定。
+本地三目标 MoonBit 测试各 **14/14**，Node.js 集成测试 **11/11**；线上 CI 同一提交成功。完整路径、服务观察和已知缺口见[验证记录][validation]。这些测试支持 MVP 所列功能，不等于完整 STAC 合规或赛事验收。当前公开源码与 Mooncakes 0.1.0 的版本范围不同；最终资格及赛期提交认定由主办方决定。
 
 [repo]: https://github.com/wangjiale6036-dotcom/moonstac
 [commits]: https://github.com/wangjiale6036-dotcom/moonstac/commits/main/
