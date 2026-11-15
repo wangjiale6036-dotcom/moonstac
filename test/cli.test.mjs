@@ -126,6 +126,40 @@ test('POST search builds CQL2 JSON filter in MoonBit', async () => {
   await assert.rejects(() => search({url: 'https://example.com/search', method: 'POST', filter: {op: 'eval', args: []}}), /unsupported CQL2 operator/);
 });
 
+test('local CQL2 guard drops results when a server ignores the filter', async () => {
+  const high = item('cloudy');
+  high.properties['eo:cloud_cover'] = 99;
+  const low = item('clear');
+  low.properties['eo:cloud_cover'] = 5;
+  const transport = async () => ({ok: true, text: async () => JSON.stringify({
+    type: 'FeatureCollection', features: [high, low], links: [],
+  })});
+  const filter = {op: '<=', args: [{property: 'eo:cloud_cover'}, 20]};
+  const result = await search({url: 'https://example.com/search', method: 'POST', filter}, transport);
+  assert.deepEqual(result.items.map(x => x.id), ['clear']);
+});
+
+test('local filter follows pagination and keeps unknown as nonmatching', async () => {
+  const high = item('cloudy');
+  high.properties['eo:cloud_cover'] = 99;
+  const low = item('clear');
+  low.properties['eo:cloud_cover'] = 5;
+  const missing = item('unknown');
+  const transport = async (_url, request) => ({ok: true, text: async () => JSON.stringify({
+    type: 'FeatureCollection',
+    features: JSON.parse(request.body).token ? [low, missing] : [high],
+    links: JSON.parse(request.body).token ? [] : [{rel: 'next', href: '/search', method: 'POST', body: {token: 'page-2'}}],
+  })});
+  const filter = {op: 'and', args: [
+    {op: '<=', args: [{property: 'eo:cloud_cover'}, 20]},
+    {op: 'not', args: [{op: '=', args: [{property: 'id'}, 'cloudy']}]},
+  ]};
+  const result = await search({url: 'https://example.com/search', method: 'POST', filter}, transport);
+  assert.deepEqual(result.items.map(x => x.id), ['clear']);
+  assert.equal(result.pages, 2);
+  assert.equal(result.hasMore, false);
+});
+
 test('rejects invalid query and pagination cycle', async () => {
   await assert.rejects(() => search({url: 'https://example.com/search', bbox: '181,0,182,1'}), /Invalid search/);
   await assert.rejects(() => search({url: 'https://example.com/search', limit: '1.5'}), /Invalid search/);
