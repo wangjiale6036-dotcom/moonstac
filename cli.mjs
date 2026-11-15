@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import {readFile} from 'node:fs/promises';
 import {pathToFileURL} from 'node:url';
-import {collections_summary, landing_summary, page_summary, search_request} from './_build/js/release/build/bridge/bridge.js';
+import {collections_summary, filter_items, landing_summary, page_summary, search_request} from './_build/js/release/build/bridge/bridge.js';
 
 function options(args) {
   const result = {collections: [], ids: [], assets: [], roles: []};
@@ -82,51 +82,12 @@ function queryBody(opts) {
   return JSON.parse(result.body);
 }
 
-function filterProperty(item, name) {
-  if (name === 'id' || name === 'collection') return item[name];
-  const key = name.startsWith('properties.') ? name.slice('properties.'.length) : name;
-  return item.properties?.[key];
-}
-
-function compareFilterValue(left, right, op) {
-  if (left == null || right == null) return null;
-  if (typeof right === 'object' && 'timestamp' in right) {
-    if (typeof left !== 'string') return null;
-    left = Date.parse(left);
-    right = Date.parse(right.timestamp);
-  }
-  if (typeof left !== typeof right || !['number', 'string', 'boolean'].includes(typeof left)) return null;
-  if (typeof left === 'number' && (!Number.isFinite(left) || !Number.isFinite(right))) return null;
-  if (op === '=') return left === right;
-  if (op === '<>') return left !== right;
-  if (typeof left === 'boolean') return null;
-  if (op === '<') return left < right;
-  if (op === '<=') return left <= right;
-  if (op === '>') return left > right;
-  if (op === '>=') return left >= right;
-  throw new Error(`Unsupported CQL2 operator: ${op}`);
-}
-
-function matchesFilter(expr, item) {
-  if (expr.op === 'and') {
-    const values = expr.args.map(arg => matchesFilter(arg, item));
-    return values.includes(false) ? false : values.includes(null) ? null : true;
-  }
-  if (expr.op === 'or') {
-    const values = expr.args.map(arg => matchesFilter(arg, item));
-    return values.includes(true) ? true : values.includes(null) ? null : false;
-  }
-  if (expr.op === 'not') {
-    const value = matchesFilter(expr.args[0], item);
-    return value === null ? null : !value;
-  }
-  const left = filterProperty(item, expr.args[0].property);
-  if (expr.op === 'between') {
-    const lower = compareFilterValue(left, expr.args[1], '>=');
-    const upper = compareFilterValue(left, expr.args[2], '<=');
-    return lower === false || upper === false ? false : lower === null || upper === null ? null : true;
-  }
-  return compareFilterValue(left, expr.args[1], expr.op);
+function filterMatches(filter, items) {
+  const response = JSON.parse(filter_items(JSON.stringify({filter, items: items.map(item => ({
+    id: item.id, collection: item.collection, properties: item.properties,
+  }))})));
+  if (response.status !== 'ok') throw new Error(`Invalid CQL2 filter result: ${response.message}`);
+  return response.matches;
 }
 
 export async function search(opts, fetchImpl = fetch) {
@@ -179,9 +140,10 @@ export async function search(opts, fetchImpl = fetch) {
     if (!response.ok) throw new Error(`STAC API returned HTTP ${response.status} at ${pageUrl.href}`);
     const page = validateText(await response.text());
     pages++;
-    for (const item of page.items) {
+    const matches = body.filter ? filterMatches(body.filter, page.items) : null;
+    for (const [index, item] of page.items.entries()) {
       // A server may accept a Filter request while ignoring it. Never return a known mismatch.
-      if (body.filter && matchesFilter(body.filter, item) !== true) continue;
+      if (matches && !matches[index]) continue;
       const itemBase = item.self ? new URL(item.self, pageUrl) : pageUrl;
       item.assets = item.assets.map(asset => ({
         ...asset,

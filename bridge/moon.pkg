@@ -10,6 +10,7 @@ options(
         "page_summary",
         "landing_summary",
         "collections_summary",
+        "filter_items",
       ],
       "format": "esm",
     },

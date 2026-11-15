@@ -135,3 +135,11 @@ test "search request accepts intersects and rejects bbox conflict" {
   )
   assert_true(conflict.contains("mutually exclusive"))
 }
+
+///|
+test "reject next link with non-string header value" {
+  let result = @moonstac.page_summary(
+    "{\"type\":\"FeatureCollection\",\"features\":[],\"links\":[{\"rel\":\"next\",\"href\":\"?page=2\",\"headers\":{\"x-token\":123}}]}",
+  )
+  assert_true(result.contains("invalid next header value"))
+}

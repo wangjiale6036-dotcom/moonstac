@@ -17,3 +17,8 @@ pub fn landing_summary(input : String) -> String {
 pub fn collections_summary(input : String) -> String {
   @stac.collections_summary(input)
 }
+
+///|
+pub fn filter_items(input : String) -> String {
+  @stac.filter_items(input)
+}

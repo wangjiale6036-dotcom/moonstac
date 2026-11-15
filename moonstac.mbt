@@ -164,7 +164,17 @@ pub fn parse_page(text : String) -> ItemPage raise StacError {
           }
           let headers = field(link, "headers")
           match headers {
-            None | Some(Object(_)) => ()
+            None => ()
+            Some(Object(values)) =>
+              for name, value in values {
+                if name == "" {
+                  raise Invalid("empty next header name")
+                }
+                match value {
+                  String(_) => ()
+                  _ => raise Invalid("invalid next header value")
+                }
+              }
             _ => raise Invalid("invalid next headers")
           }
           let merge = match field(link, "merge") {

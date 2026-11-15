@@ -8,6 +8,8 @@ import {
 // Values
 pub fn collections_summary(String) -> String
 
+pub fn filter_items(String) -> String
+
 pub fn landing_summary(String) -> String
 
 pub fn page_summary(String) -> String
