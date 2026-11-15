@@ -19,6 +19,7 @@ node cli.mjs validate test-fixtures/one-page.json
 node cli.mjs discover --url https://earth-search.aws.element84.com/v1/
 node cli.mjs collections --url https://earth-search.aws.element84.com/v1/collections
 node cli.mjs search --url https://earth-search.aws.element84.com/v1/search --bbox 120,30,121,31 --collection sentinel-2-l2a --limit 2 --max-pages 2
+node cli.mjs search --url https://earth-search.aws.element84.com/v1/search --bbox 120,30,121,31 --collection sentinel-2-l2a --method POST --filter-file test-fixtures/cloud-cover-filter.json --limit 10 --max-pages 5
 node cli.mjs search --url https://planetarycomputer.microsoft.com/api/stac/v1/search --bbox 120,30,121,31 --collection sentinel-2-l2a --method POST --filter-file test-fixtures/cloud-cover-filter.json --limit 3 --max-pages 1
 node cli.mjs search --url https://earth-search.aws.element84.com/v1/search --intersects-file test-fixtures/search-area.geojson --collection sentinel-2-l2a --method POST --limit 1
 node cli.mjs assets --url https://earth-search.aws.element84.com/v1/search --bbox 120,30,121,31 --collection sentinel-2-l2a --limit 1 --role data
@@ -30,7 +31,7 @@ node cli.mjs assets --url https://earth-search.aws.element84.com/v1/search --bbo
 
 `assets` 命令接受相同搜索参数，并额外支持可重复的 `--asset <key>` 和 `--role <role>`；输出匹配的 Item ID、集合、时间、资产 key、标题、媒体类型、角色和绝对 URL。相对资产地址先以 Item 的 `self` 链接为基准；缺少 `self` 时以返回该 Item 的搜索页地址为基准。输出仅是清单，不下载数据。`search` 同时保留资产的原始 `href`，并给出 `resolvedHref`。
 
-执行 CQL2 过滤时，先确认服务声明并实际支持 STAC Filter 扩展。Earth Search v1 的根目录没有声明该扩展；2026-11-15 实测它接受 `filter` 请求却返回不满足云量阈值的场景，因此上面的过滤示例使用支持 Filter 的 Microsoft Planetary Computer。CLI 负责构造和发送过滤条件，不会把服务忽略的条件自动改为本地过滤。
+执行 CQL2 过滤时，最好先确认服务声明并实际支持 STAC Filter 扩展。Earth Search v1 没有声明该扩展，而且可能忽略传入的 `filter`。CLI 仍会按受支持的 CQL2 子集在本地复核返回的每个 Item，排除已知不匹配或属性缺失的结果。若服务忽略过滤，读取到 `--max-pages` 上限时可能只得到少量或零个匹配项；`hasMore=true` 表示后面仍有未检查的页。本地复核不能减少服务返回的数据量，也不等于服务端实现了 Filter。
 
 ## 支持范围
 
