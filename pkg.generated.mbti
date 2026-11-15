@@ -24,6 +24,8 @@ pub fn parse_landing(String) -> Landing raise StacError
 
 pub fn parse_page(String) -> ItemPage raise StacError
 
+pub fn query_fallback(String) -> String
+
 pub fn search_body(Array[Double], String?, Array[String], Int) -> String raise StacError
 
 pub fn search_request(String) -> String

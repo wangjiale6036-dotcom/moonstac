@@ -32,7 +32,7 @@ node cli.mjs assets --url https://earth-search.aws.element84.com/v1/search --bbo
 
 `assets` 命令接受相同搜索参数，并额外支持可重复的 `--asset <key>` 和 `--role <role>`；输出匹配的 Item ID、集合、时间、资产 key、标题、媒体类型、角色和绝对 URL。相对资产地址先以 Item 的 `self` 链接为基准；缺少 `self` 时以返回该 Item 的搜索页地址为基准。输出仅是清单，不下载数据。`search` 同时保留资产的原始 `href`，并给出 `resolvedHref`。
 
-执行 CQL2 过滤时，最好先确认服务声明并实际支持 STAC Filter 扩展。Earth Search v1 没有声明该扩展，而且可能忽略传入的 `filter`。MoonBit 核心会按受支持的 CQL2 子集逐项复核返回的 Item，排除已知不匹配或属性缺失的结果。若服务忽略过滤，读取到 `--max-pages` 上限时可能只得到少量或零个匹配项；`hasMore=true` 表示后面仍有未检查的页。本地复核不能减少服务返回的数据量，也不等于服务端实现了 Filter。
+执行 CQL2 过滤时，CLI 会检查服务根目录的 conformance 声明。Earth Search v1 未声明 Filter，但声明了 Item Search Query；对能等价表示的比较、`between` 和 `and` 条件，MoonBit 将 CQL2 表达式转换为 STAC Query 发送给服务。`or`、`not` 等无法等价转换的表达式继续按原 CQL2 请求发送，并受页数上限约束。无论服务采用哪种扩展，MoonBit 都会逐项复核返回的 Item，排除已知不匹配或属性缺失的结果。`queryFallbackUsed` 表示本次请求实际使用 Query 转换。若服务忽略请求中的过滤且 `hasMore=true`，后续页仍可能含匹配项；本地复核不保证已遍历整个目录。程序化 `search` 调用可在已确认服务支持 Query 时设置 `queryFallback: true`。
 
 ## 支持范围
 
@@ -42,7 +42,7 @@ node cli.mjs assets --url https://earth-search.aws.element84.com/v1/search --bbo
 - 支持一组明确的 CQL2 JSON 操作符（比较、`between`、`and`、`or`、`not`），可按 `eo:cloud_cover` 等 Item 属性过滤；不支持的操作符会明确报错。
 - 处理 GET/POST `next` 链接、相对地址、`body`、`headers` 和 `merge`；限制页数并检测重复请求。
 - 从资产中提取标题、媒体类型、角色及 Item `self` 链接，生成可筛选的资产清单。
-- MoonBit 公共 API：`parse_item`、`parse_page`、`parse_landing`、`parse_collections`、`search_body`、`filter_items`；JS 桥接 API：`search_request`、`page_summary`、`landing_summary`、`collections_summary`、`filter_items`。
+- MoonBit 公共 API：`parse_item`、`parse_page`、`parse_landing`、`parse_collections`、`search_body`、`filter_items`、`query_fallback`；JS 桥接 API：`search_request`、`page_summary`、`landing_summary`、`collections_summary`、`filter_items`、`query_fallback`。
 
 当前不检查 GeoJSON 自交与环方向、扩展 Schema、所有 STAC Item 字段语义，也不支持完整 CQL2、排序或字段选择。`validate` 输出的资产链接仍是原始值；`search` 和 `assets` 增加绝对地址解析。API 认证及速率限制由调用环境处理。不要把 `validate` 的通过结果视为完整 STAC 合规证明。
 

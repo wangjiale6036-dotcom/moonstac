@@ -11,6 +11,7 @@ options(
         "landing_summary",
         "collections_summary",
         "filter_items",
+        "query_fallback",
       ],
       "format": "esm",
     },

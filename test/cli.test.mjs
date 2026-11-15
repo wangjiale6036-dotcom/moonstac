@@ -160,6 +160,26 @@ test('local filter follows pagination and keeps unknown as nonmatching', async (
   assert.equal(result.hasMore, false);
 });
 
+test('Query fallback uses a server-side constraint and retains local verification', async () => {
+  const clear = item('clear');
+  clear.properties['eo:cloud_cover'] = 5;
+  const cloudy = item('cloudy');
+  cloudy.properties['eo:cloud_cover'] = 99;
+  let sent;
+  const transport = async (_url, request) => {
+    sent = JSON.parse(request.body);
+    return {ok: true, text: async () => JSON.stringify({
+      type: 'FeatureCollection', features: [clear, cloudy], links: [],
+    })};
+  };
+  const filter = {op: '<=', args: [{property: 'eo:cloud_cover'}, 20]};
+  const result = await search({url: 'https://example.com/search', method: 'POST', filter, queryFallback: true}, transport);
+  assert.deepEqual(sent.query, {'eo:cloud_cover': {lte: 20}});
+  assert.equal(sent.filter, undefined);
+  assert.deepEqual(result.items.map(x => x.id), ['clear']);
+  assert.equal(result.queryFallbackUsed, true);
+});
+
 test('rejects invalid query and pagination cycle', async () => {
   await assert.rejects(() => search({url: 'https://example.com/search', bbox: '181,0,182,1'}), /Invalid search/);
   await assert.rejects(() => search({url: 'https://example.com/search', limit: '1.5'}), /Invalid search/);

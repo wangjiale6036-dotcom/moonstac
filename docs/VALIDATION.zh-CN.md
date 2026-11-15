@@ -14,4 +14,6 @@
 
 2026-11-15 复验：`filter_items` 的逐项 CQL2 复核已迁入 MoonBit 核心；本地 JS、Wasm-GC、Native 各 20/20，Node.js 13/13，`validate` 样例成功。`npm run verify:live` 访问两个公开服务并对关键路径做机器断言：Earth Search 返回 9 个集合，GET 与 POST 各读取两页，GeoJSON `intersects` 返回一个 Item，资产清单含 32 个 `data` 资产；读取五页后由 MoonBit 本地筛出四个云量 `<= 20` 的 Item，`hasMore=true`。Microsoft Planetary Computer 的根目录声明 CQL2 JSON 与 Item Search Filter；对它执行相同过滤条件得到三个 Item，云量均不超过 20。验证只覆盖所列查询，不等于完整过滤表达式兼容。
 
+同日进一步验证 STAC Query 回退：Earth Search 声明 Item Search Query 而未声明 Filter。MoonBit 将 `eo:cloud_cover <= 20` 转为 Query 扩展的 `{"eo:cloud_cover":{"lte":20}}`，CLI 自动发现并使用该回退，仍由 MoonBit 复核每个返回 Item。`npm run verify:live` 读取五页，得到 50 个符合阈值的 Item，`queryFallbackUsed=true`、`hasMore=true`；直接运行 CLI 的单页示例得到五个符合阈值的 Item。Microsoft Planetary Computer 仍使用其声明支持的 Filter。此时本地三目标各 23/23、Node.js 14/14；上述五页是按页数上限读取，不代表遍历全部匹配项。转换语义依据 [STAC Query 扩展规范](https://github.com/stac-api-extensions/query)，复杂的 `or`、`not` 不转换，保留逐项复核。
+
 尚未验证：macOS/Windows 线上 CI、完整 Schema 一致性、认证服务以及多个服务的复杂 GeoJSON/分页组合。

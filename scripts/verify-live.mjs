@@ -30,9 +30,10 @@ assert.ok(assets.assets.length > 0);
 assert.ok(assets.assets.some(asset => new URL(asset.href).protocol === 'https:'));
 
 const earthFilter = await search({url: landing.search, method: 'POST', bbox,
-  collections: [collection], filter, limit: 10, 'max-pages': 5});
+  collections: [collection], filter, queryFallback: true, limit: 10, 'max-pages': 5});
 assert.ok(earthFilter.items.length > 0);
 assert.ok(earthFilter.items.every(item => item.properties['eo:cloud_cover'] <= 20));
+assert.equal(earthFilter.queryFallbackUsed, true);
 
 const pcLanding = await discover(pcRoot);
 assert.ok(pcLanding.conformsTo.some(value => value.includes('cql2-json')));
@@ -44,6 +45,7 @@ assert.ok(pcFilter.items.every(item => item.properties['eo:cloud_cover'] <= 20))
 console.log(JSON.stringify({
   earthSearch: {collections: collections.collections.length, getPages: get.pages,
     postPages: post.pages, areaItems: area.items.length, dataAssets: assets.assets.length,
-    locallyFilteredItems: earthFilter.items.length, filterHasMore: earthFilter.hasMore},
+    filteredItems: earthFilter.items.length, queryFallbackUsed: earthFilter.queryFallbackUsed,
+    filterHasMore: earthFilter.hasMore},
   planetaryComputer: {filteredItems: pcFilter.items.length},
 }, null, 2));

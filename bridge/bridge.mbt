@@ -22,3 +22,8 @@ pub fn collections_summary(input : String) -> String {
 pub fn filter_items(input : String) -> String {
   @stac.filter_items(input)
 }
+
+///|
+pub fn query_fallback(input : String) -> String {
+  @stac.query_fallback(input)
+}

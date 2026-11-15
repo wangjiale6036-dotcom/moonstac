@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import {readFile} from 'node:fs/promises';
 import {pathToFileURL} from 'node:url';
-import {collections_summary, filter_items, landing_summary, page_summary, search_request} from './_build/js/release/build/bridge/bridge.js';
+import {collections_summary, filter_items, landing_summary, page_summary, query_fallback, search_request} from './_build/js/release/build/bridge/bridge.js';
 
 function options(args) {
   const result = {collections: [], ids: [], assets: [], roles: []};
@@ -103,6 +103,17 @@ export async function search(opts, fetchImpl = fetch) {
   const body = queryBody(opts);
   if (body.filter && method !== 'POST') throw new Error('CQL2 JSON filter requires --method POST');
   if (body.intersects && method !== 'POST') throw new Error('GeoJSON intersects requires --method POST');
+  const requestedFilter = body.filter;
+  let queryFallbackUsed = false;
+  if (requestedFilter && opts.queryFallback) {
+    const translation = JSON.parse(query_fallback(JSON.stringify(requestedFilter)));
+    if (translation.status === 'ok') {
+      delete body.filter;
+      delete body['filter-lang'];
+      body.query = translation.query;
+      queryFallbackUsed = true;
+    }
+  }
   if (method === 'GET') {
     if (body.bbox) url.searchParams.set('bbox', body.bbox.join(','));
     url.searchParams.set('limit', String(body.limit));
@@ -140,7 +151,7 @@ export async function search(opts, fetchImpl = fetch) {
     if (!response.ok) throw new Error(`STAC API returned HTTP ${response.status} at ${pageUrl.href}`);
     const page = validateText(await response.text());
     pages++;
-    const matches = body.filter ? filterMatches(body.filter, page.items) : null;
+    const matches = requestedFilter ? filterMatches(requestedFilter, page.items) : null;
     for (const [index, item] of page.items.entries()) {
       // A server may accept a Filter request while ignoring it. Never return a known mismatch.
       if (matches && !matches[index]) continue;
@@ -161,7 +172,20 @@ export async function search(opts, fetchImpl = fetch) {
       merge: page.next.merge,
     };
   }
-  return {items, pages, hasMore: next !== null};
+  return {items, pages, hasMore: next !== null, queryFallbackUsed};
+}
+
+async function canUseQueryFallback(searchUrl, fetchImpl = fetch) {
+  const url = new URL(searchUrl);
+  if (!url.pathname.endsWith('/search')) return false;
+  try {
+    const landing = await discover(new URL('.', url).href, fetchImpl);
+    const conforms = landing.conformsTo;
+    return conforms.includes('https://api.stacspec.org/v1.0.0/item-search#query') &&
+      !conforms.some(value => value.includes('item-search#filter'));
+  } catch {
+    return false;
+  }
 }
 
 export function assetManifest(result, opts = {}) {
@@ -202,6 +226,7 @@ export async function main(args) {
     if (!opts.url) throw new Error('Usage: node cli.mjs <search|assets> --url <search-endpoint> [--bbox west,south,east,north|--intersects-file geometry.json] [--datetime ...] [--collection ...] [--id ...] [--limit N] [--method GET|POST] [--max-pages N]');
     if (opts['filter-file']) opts.filter = JSON.parse(await readFile(opts['filter-file'], 'utf8'));
     if (opts['intersects-file']) opts.intersects = JSON.parse(await readFile(opts['intersects-file'], 'utf8'));
+    if (opts.filter) opts.queryFallback = await canUseQueryFallback(opts.url);
     const result = await search(opts);
     console.log(JSON.stringify(command === 'assets' ? assetManifest(result, opts) : result, null, 2));
   } else {

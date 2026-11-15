@@ -10,6 +10,8 @@ pub fn landing_summary(String) -> String
 
 pub fn page_summary(String) -> String
 
+pub fn query_fallback(String) -> String
+
 pub fn search_request(String) -> String
 
 // Errors
