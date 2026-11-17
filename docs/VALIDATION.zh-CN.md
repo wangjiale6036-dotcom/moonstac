@@ -16,4 +16,6 @@
 
 同日进一步验证 STAC Query 回退：Earth Search 声明 Item Search Query 而未声明 Filter。MoonBit 将 `eo:cloud_cover <= 20` 转为 Query 扩展的 `{"eo:cloud_cover":{"lte":20}}`，CLI 自动发现并使用该回退，仍由 MoonBit 复核每个返回 Item。`npm run verify:live` 读取五页，得到 50 个符合阈值的 Item，`queryFallbackUsed=true`、`hasMore=true`；直接运行 CLI 的单页示例得到五个符合阈值的 Item。Microsoft Planetary Computer 仍使用其声明支持的 Filter。此时本地三目标各 23/23、Node.js 14/14；上述五页是按页数上限读取，不代表遍历全部匹配项。转换语义依据 [STAC Query 扩展规范](https://github.com/stac-api-extensions/query)，复杂的 `or`、`not` 不转换，保留逐项复核。
 
+2026-11-17 按申报书复核当前 MVP：`moon test --target js`、`moon test --target wasm-gc`、`moon test --target native` 各 23/23，`npm test` 14/14。`npm run verify:live` 再次通过：Earth Search 9 个集合，GET/POST 各两页，GeoJSON 区域查询一个 Item，32 个 `data` 资产，Query 回退过滤五页得到 50 个云量符合条件的 Item；Planetary Computer 的 Filter 查询得到三个符合条件的 Item。直接执行申报书所列的 `validate`、`discover`、`collections`、`search`、`assets` 五个 CLI 命令，分别观察到验证成功、根目录 ID `earth-search-aws`、9 个集合、一个区域查询 Item 和 32 个 `data` 资产。[GitHub Actions CI](https://github.com/wangjiale6036-dotcom/moonstac/actions/runs/43717305798) 对 `5b0cc68` 的结果为 `success`。这些是本次复测观察；公网目录内容和返回数量会变化。
+
 尚未验证：macOS/Windows 线上 CI、完整 Schema 一致性、认证服务以及多个服务的复杂 GeoJSON/分页组合。
